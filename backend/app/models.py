@@ -83,11 +83,14 @@ class SessionReport(BaseModel):
     repetitions: int
     partialRepetitions: int
     validFrameRate: float
-    averageKneeDistanceRatio: float | None
-    maxKneeAngleAsymmetry: float | None
-    maxCenterShiftPercent: float | None
-    maxValgusPercent: float | None
+    qualityLevel: Literal["good", "caution", "low"]
+    qualityMessage: str
+    medianKneeDistanceRatio: float | None
+    p95KneeAngleAsymmetry: float | None
+    p95CenterShiftPercent: float | None
+    p95ValgusPercent: float | None
     symmetryScore: float | None
+    recommendations: list[str]
     warningCounts: dict[str, int]
     timeline: list[TimelinePoint]
     reps: list[RepetitionSummary]

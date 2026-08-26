@@ -53,4 +53,18 @@ def test_builds_session_report_from_frontend_rep_boundaries() -> None:
     assert report.repetitions == 1
     assert report.partialRepetitions == 1
     assert report.validFrameRate == 100
+    assert report.qualityLevel == "good"
+    assert report.p95CenterShiftPercent == 0
+    assert report.symmetryScore is not None
     assert report.reps[0].repId == 1
+
+
+def test_low_quality_report_suppresses_symmetry_score() -> None:
+    analyzer = FrontalSquatAnalyzer()
+    analyzer.analyze(pose_frame())
+    analyzer.analyze(pose_frame(visibility=0.2))
+    session = SessionEnd(type="session-end-v1", durationMs=1000, repetitions=0, partialRepetitions=0, reps=[])
+    report = analyzer.report(session)
+    assert report.qualityLevel == "low"
+    assert report.symmetryScore is None
+    assert "重新采集" in report.qualityMessage

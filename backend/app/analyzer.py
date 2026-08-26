@@ -25,6 +25,18 @@ def _line_angle(a: Landmark, b: Landmark) -> float:
     return math.degrees(math.atan2(b.y - a.y, b.x - a.x))
 
 
+def _percentile(values: list[float], quantile: float) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    position = (len(ordered) - 1) * quantile
+    lower = math.floor(position)
+    upper = math.ceil(position)
+    if lower == upper:
+        return ordered[lower]
+    return ordered[lower] + (ordered[upper] - ordered[lower]) * (position - lower)
+
+
 def _valgus_percent(hip: Landmark, knee: Landmark, ankle: Landmark, center_x: float) -> float:
     dy = ankle.y - hip.y
     interpolation = 0.5 if abs(dy) < 1e-9 else (knee.y - hip.y) / dy
@@ -69,21 +81,42 @@ class FrontalSquatAnalyzer:
 
     def report(self, session: SessionEnd) -> SessionReport:
         metrics = self._metrics
-        average_ratio = sum(item.kneeDistanceRatio for item in metrics) / len(metrics) if metrics else None
-        max_asymmetry = max((item.kneeAngleAsymmetry for item in metrics), default=None)
-        max_shift = max((abs(item.centerShiftPercent) for item in metrics), default=None)
-        max_valgus = max((max(item.leftValgusPercent, item.rightValgusPercent) for item in metrics), default=None)
-        symmetry = max(0.0, 100 - (max_asymmetry / 30) * 100) if max_asymmetry is not None else None
+        valid_rate = (self._valid_frames / self._total_frames * 100) if self._total_frames else 0
+        quality_level = "good" if valid_rate >= 85 else "caution" if valid_rate >= 70 else "low"
+        quality_message = {
+            "good": "采集质量良好，报告可用于本组动作复盘。",
+            "caution": "部分时段关键点不稳定，请结合趋势谨慎解读。",
+            "low": "有效画面不足，本报告仅作参考；建议调整机位后重新采集。",
+        }[quality_level]
+        median_ratio = _percentile([item.kneeDistanceRatio for item in metrics], 0.5)
+        p95_asymmetry = _percentile([item.kneeAngleAsymmetry for item in metrics], 0.95)
+        p95_shift = _percentile([abs(item.centerShiftPercent) for item in metrics], 0.95)
+        p95_valgus = _percentile([max(item.leftValgusPercent, item.rightValgusPercent) for item in metrics], 0.95)
+        symmetry = max(0.0, 100 - (p95_asymmetry / 30) * 100) if p95_asymmetry is not None and quality_level != "low" else None
+        recommendations: list[str] = []
+        if quality_level != "good":
+            recommendations.append("退后半步并保持全身入镜，避免遮挡髋、膝和脚踝。")
+        if p95_shift is not None and p95_shift > 10:
+            recommendations.append("下蹲时保持骨盆居中，避免持续向一侧偏移。")
+        if p95_valgus is not None and p95_valgus > 6:
+            recommendations.append("让膝盖朝向脚尖方向，避免内扣。")
+        if session.partialRepetitions:
+            recommendations.append("下一组优先完成稳定的底部位置，再开始站起。")
+        if not recommendations:
+            recommendations.append("动作整体稳定，可在保持质量的前提下逐步增加次数。")
         return SessionReport(
             durationMs=session.durationMs,
             repetitions=session.repetitions,
             partialRepetitions=session.partialRepetitions,
-            validFrameRate=(self._valid_frames / self._total_frames * 100) if self._total_frames else 0,
-            averageKneeDistanceRatio=average_ratio,
-            maxKneeAngleAsymmetry=max_asymmetry,
-            maxCenterShiftPercent=max_shift,
-            maxValgusPercent=max_valgus,
+            validFrameRate=valid_rate,
+            qualityLevel=quality_level,
+            qualityMessage=quality_message,
+            medianKneeDistanceRatio=median_ratio,
+            p95KneeAngleAsymmetry=p95_asymmetry,
+            p95CenterShiftPercent=p95_shift,
+            p95ValgusPercent=p95_valgus,
             symmetryScore=symmetry,
+            recommendations=recommendations,
             warningCounts=self._warning_counts,
             timeline=self._timeline,
             reps=session.reps,
@@ -118,6 +151,7 @@ class FrontalSquatAnalyzer:
         ankle_width = abs(points[LEFT["ankle"]].x - points[RIGHT["ankle"]].x)
         knee_width = abs(points[LEFT["knee"]].x - points[RIGHT["knee"]].x)
         hip_width = abs(points[LEFT["hip"]].x - points[RIGHT["hip"]].x)
+        stance_width = max(ankle_width, hip_width * 0.75, 0.05)
         asymmetry = abs(left_angle - right_angle)
         left_valgus = _valgus_percent(points[LEFT["hip"]], points[LEFT["knee"]], points[LEFT["ankle"]], hip_center_x)
         right_valgus = _valgus_percent(points[RIGHT["hip"]], points[RIGHT["knee"]], points[RIGHT["ankle"]], hip_center_x)
@@ -136,7 +170,7 @@ class FrontalSquatAnalyzer:
         warnings: list[str] = []
         if max(left_valgus, right_valgus) > 6:
             warnings.append("knee_valgus")
-        center_shift = ((hip_center_x - ankle_center_x) / max(ankle_width, 1e-6)) * 100
+        center_shift = ((hip_center_x - ankle_center_x) / stance_width) * 100
         if abs(center_shift) > 10:
             warnings.append("lateral_weight_shift")
         if asymmetry > 12:
@@ -147,7 +181,7 @@ class FrontalSquatAnalyzer:
             rightKneeAngle=right_angle,
             averageKneeAngle=average,
             kneeAngleAsymmetry=asymmetry,
-            kneeDistanceRatio=knee_width / max(ankle_width, 1e-6),
+            kneeDistanceRatio=knee_width / stance_width,
             leftValgusPercent=left_valgus,
             rightValgusPercent=right_valgus,
             pelvisTiltDeg=_line_angle(points[LEFT["hip"]], points[RIGHT["hip"]]),
