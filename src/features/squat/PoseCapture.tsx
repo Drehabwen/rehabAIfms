@@ -5,6 +5,7 @@ type PoseCaptureProps = {
   paused: boolean;
 };
 
+// Metro replaces this file with PoseCapture.native.tsx for Android and iOS.
 export function PoseCapture({ onFrameMessage, paused }: PoseCaptureProps) {
   const frameRef = useRef<HTMLIFrameElement>(null);
 

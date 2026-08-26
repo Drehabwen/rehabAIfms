@@ -24,8 +24,8 @@
     <video id="video" playsinline autoplay muted></video>
     <canvas id="canvas"></canvas>
 
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1626848346/camera_utils.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.4.1635989137/pose.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js"></script>
 
     <script>
         const videoElement = document.getElementById('video');
@@ -61,7 +61,7 @@
 
         const pose = new Pose({
             locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.4.1635989137/${file}`;
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`;
             }
         });
         
