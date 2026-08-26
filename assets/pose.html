@@ -1,97 +1,57 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-    <title>MediaPipe Pose Estimation</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-        }
-        #video, #canvas {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transform: scaleX(-1);
-        }
-        #canvas {
-            pointer-events: none;
-        }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>深蹲姿态捕捉</title>
+  <style>
+    :root{color-scheme:dark;font-family:system-ui,sans-serif}html,body{background:#101915;height:100%;margin:0;overflow:hidden}
+    #stage{height:100%;position:relative;width:100%}#video,#canvas{height:100%;inset:0;object-fit:cover;position:absolute;transform:scaleX(-1);width:100%}#canvas{pointer-events:none}
+    #start-screen{align-items:center;background:radial-gradient(circle at 50% 35%,#274437,#101915 70%);display:flex;flex-direction:column;inset:0;justify-content:center;padding:24px;position:absolute;text-align:center;z-index:3}
+    #start-screen[hidden]{display:none}h1{font-size:clamp(26px,5vw,42px);margin:0 0 10px}p{color:#b9cbc2;line-height:1.6;margin:0 0 26px;max-width:480px}
+    button{background:#29a66f;border:0;border-radius:999px;color:#fff;cursor:pointer;font-size:18px;font-weight:800;padding:16px 34px}
+    #status{background:rgba(10,20,16,.78);border-radius:999px;bottom:22px;color:#fff;font-size:14px;font-weight:700;left:50%;padding:10px 16px;position:absolute;transform:translateX(-50%);z-index:2;white-space:nowrap}
+    #status[data-error="true"]{background:rgba(138,38,38,.9)}
+  </style>
 </head>
 <body>
-    <video id="video" playsinline autoplay muted></video>
-    <canvas id="canvas"></canvas>
-
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js"></script>
-
-    <script>
-        const videoElement = document.getElementById('video');
-        let sequence = 0;
-
-        function onResults(results) {
-            try {
-                if (results.poseLandmarks) {
-                    const simplifiedLandmarks = results.poseLandmarks.map(landmark => ({
-                        x: landmark.x,
-                        y: landmark.y,
-                        z: landmark.z,
-                        visibility: landmark.visibility
-                    }));
-                    
-                    const message = JSON.stringify({
-                        version: 1,
-                        sequence: sequence++,
-                        timestampMs: performance.now(),
-                        landmarks: simplifiedLandmarks
-                    });
-
-                    if (window.ReactNativeWebView) {
-                        window.ReactNativeWebView.postMessage(message);
-                    } else if (window.parent !== window) {
-                        window.parent.postMessage(message, window.location.origin);
-                    }
-                }
-            } catch (error) {
-                console.error('Error processing pose landmarks:', error);
-            }
-        }
-
-        const pose = new Pose({
-            locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`;
-            }
-        });
-        
-        pose.setOptions({
-            modelComplexity: 1,
-            smoothLandmarks: true,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5,
-            staticImageMode: false
-        });
-        
-        pose.onResults(onResults);
-
-        const camera = new Camera(videoElement, {
-            onFrame: async () => {
-                try {
-                    await pose.send({image: videoElement});
-                } catch (error) {
-                    console.error('Error sending frame to pose estimation:', error);
-                }
-            },
-            width: 1280,
-            height: 720,
-            facingMode: 'user' // 仅使用前置摄像头
-        });
-        
-        // 启动摄像头
-        camera.start().catch(error => {
-            console.error('Error starting camera:', error);
-        });
-    </script>
+  <main id="stage">
+    <video id="video" playsinline autoplay muted></video><canvas id="canvas"></canvas>
+    <div id="status">等待开始</div>
+    <section id="start-screen"><h1>深蹲姿态捕捉</h1><p>点击后进入全屏并调用本机摄像头。请让全身保持在画面内，系统会连续绘制骨骼并计算动作时序。</p><button id="start" type="button">开始捕捉</button></section>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1675466124/drawing_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js"></script>
+  <script>
+    const stage=document.getElementById('stage'),video=document.getElementById('video'),canvas=document.getElementById('canvas'),context=canvas.getContext('2d'),startScreen=document.getElementById('start-screen'),startButton=document.getElementById('start'),status=document.getElementById('status');
+    let camera,running=false,enteredFullscreen=false,sequence=0;
+    function setStatus(message,error=false){status.textContent=message;status.dataset.error=String(error)}
+    function sendFrame(landmarks){
+      const message=JSON.stringify({version:1,sequence:sequence++,timestampMs:performance.now(),landmarks:landmarks.map(({x,y,z,visibility})=>({x,y,z,visibility}))});
+      if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(message);else if(window.parent!==window)window.parent.postMessage(message,window.location.origin);
+    }
+    function onResults(results){
+      const width=video.videoWidth||1280,height=video.videoHeight||720;
+      if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height}
+      context.clearRect(0,0,width,height);
+      if(!results.poseLandmarks){setStatus('请让全身进入画面');return}
+      drawConnectors(context,results.poseLandmarks,POSE_CONNECTIONS,{color:'#63E6A5',lineWidth:4});
+      drawLandmarks(context,results.poseLandmarks,{color:'#FFFFFF',fillColor:'#1B9C68',lineWidth:2,radius:5});
+      setStatus('正在捕捉并实时计算');sendFrame(results.poseLandmarks);
+    }
+    const pose=new Pose({locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`});
+    pose.setOptions({modelComplexity:1,smoothLandmarks:true,minDetectionConfidence:.5,minTrackingConfidence:.5,staticImageMode:false});pose.onResults(onResults);
+    async function startCapture(){
+      if(running)return;startButton.disabled=true;setStatus('正在启动摄像头…');
+      try{if(stage.requestFullscreen){await stage.requestFullscreen();enteredFullscreen=true}}catch(_){}
+      try{camera=new Camera(video,{onFrame:async()=>pose.send({image:video}),width:1280,height:720,facingMode:'user'});await camera.start();running=true;startScreen.hidden=true;setStatus('请站到画面中央')}
+      catch(error){startButton.disabled=false;const message=error?.name==='NotReadableError'?'摄像头正被其他应用占用':error?.name==='NotAllowedError'?'请允许浏览器使用摄像头':'无法打开摄像头，请检查设备';setStatus(message,true);console.error('无法启动摄像头：',error)}
+    }
+    function stopCapture(){if(!running)return;camera?.stop();running=false;startButton.disabled=false;startScreen.hidden=false;context.clearRect(0,0,canvas.width,canvas.height);setStatus('已停止捕捉')}
+    startButton.addEventListener('click',startCapture);
+    document.addEventListener('fullscreenchange',()=>{if(enteredFullscreen&&!document.fullscreenElement){enteredFullscreen=false;stopCapture()}});
+    window.addEventListener('pagehide',stopCapture);
+  </script>
 </body>
 </html>

@@ -29,7 +29,8 @@ export function PoseCapture({ onFrameMessage, paused }: PoseCaptureProps) {
     <iframe
       ref={frameRef}
       src="/pose.html"
-      allow="camera"
+      allow="camera; fullscreen"
+      allowFullScreen
       title="深蹲姿态采集"
       style={{ background: '#17201C', border: 0, height: '100%', width: '100%' }}
     />
