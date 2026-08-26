@@ -1,5 +1,5 @@
 from backend.app.analyzer import FrontalSquatAnalyzer
-from backend.app.models import Landmark, PoseFrame
+from backend.app.models import Landmark, PoseFrame, RepetitionSummary, SessionEnd
 
 
 def pose_frame(knee_y: float = 0.55, knee_inset: float = 0.0, visibility: float = 0.95) -> PoseFrame:
@@ -37,3 +37,20 @@ def test_emits_one_second_timeline_aggregate() -> None:
     result = analyzer.analyze(later)
     assert result.timelinePoint is not None
     assert result.timelinePoint.second > 1
+
+
+def test_builds_session_report_from_frontend_rep_boundaries() -> None:
+    analyzer = FrontalSquatAnalyzer()
+    analyzer.analyze(pose_frame())
+    session = SessionEnd(
+        type="session-end-v1", durationMs=3200, repetitions=1, partialRepetitions=1,
+        reps=[RepetitionSummary(
+            repId=1, startedAtMs=200, bottomAtMs=1200, completedAtMs=2400,
+            durationMs=2200, minKneeAngle=112,
+        )],
+    )
+    report = analyzer.report(session)
+    assert report.repetitions == 1
+    assert report.partialRepetitions == 1
+    assert report.validFrameRate == 100
+    assert report.reps[0].repId == 1

@@ -1,6 +1,6 @@
 import math
 
-from .models import AnalysisResult, FrameAnalysis, FrontalMetrics, Landmark, PoseFrame, Quality, TimelinePoint
+from .models import AnalysisResult, FrameAnalysis, FrontalMetrics, Landmark, PoseFrame, Quality, SessionEnd, SessionReport, TimelinePoint
 
 LEFT = {"shoulder": 11, "hip": 23, "knee": 25, "ankle": 27}
 RIGHT = {"shoulder": 12, "hip": 24, "knee": 26, "ankle": 28}
@@ -42,6 +42,11 @@ class FrontalSquatAnalyzer:
         self._started_at: float | None = None
         self._window_started_at: float | None = None
         self._window: list[FrontalMetrics] = []
+        self._metrics: list[FrontalMetrics] = []
+        self._timeline: list[TimelinePoint] = []
+        self._warning_counts: dict[str, int] = {}
+        self._total_frames = 0
+        self._valid_frames = 0
 
     def _timeline_point(self, timestamp_ms: float, metrics: FrontalMetrics) -> TimelinePoint | None:
         self._started_at = timestamp_ms if self._started_at is None else self._started_at
@@ -59,9 +64,33 @@ class FrontalSquatAnalyzer:
         )
         self._window = []
         self._window_started_at = timestamp_ms
+        self._timeline.append(point)
         return point
 
+    def report(self, session: SessionEnd) -> SessionReport:
+        metrics = self._metrics
+        average_ratio = sum(item.kneeDistanceRatio for item in metrics) / len(metrics) if metrics else None
+        max_asymmetry = max((item.kneeAngleAsymmetry for item in metrics), default=None)
+        max_shift = max((abs(item.centerShiftPercent) for item in metrics), default=None)
+        max_valgus = max((max(item.leftValgusPercent, item.rightValgusPercent) for item in metrics), default=None)
+        symmetry = max(0.0, 100 - (max_asymmetry / 30) * 100) if max_asymmetry is not None else None
+        return SessionReport(
+            durationMs=session.durationMs,
+            repetitions=session.repetitions,
+            partialRepetitions=session.partialRepetitions,
+            validFrameRate=(self._valid_frames / self._total_frames * 100) if self._total_frames else 0,
+            averageKneeDistanceRatio=average_ratio,
+            maxKneeAngleAsymmetry=max_asymmetry,
+            maxCenterShiftPercent=max_shift,
+            maxValgusPercent=max_valgus,
+            symmetryScore=symmetry,
+            warningCounts=self._warning_counts,
+            timeline=self._timeline,
+            reps=session.reps,
+        )
+
     def analyze(self, frame: PoseFrame) -> AnalysisResult:
+        self._total_frames += 1
         score = min(frame.landmarks[index].visibility for index in REQUIRED)
         if score < self.min_visibility:
             return AnalysisResult(
@@ -76,6 +105,7 @@ class FrontalSquatAnalyzer:
             )
 
         points = frame.landmarks
+        self._valid_frames += 1
         left_angle = _angle(points[LEFT["hip"]], points[LEFT["knee"]], points[LEFT["ankle"]])
         right_angle = _angle(points[RIGHT["hip"]], points[RIGHT["knee"]], points[RIGHT["ankle"]])
         raw_average = (left_angle + right_angle) / 2
@@ -128,6 +158,9 @@ class FrontalSquatAnalyzer:
             )),
             centerShiftPercent=center_shift,
         )
+        self._metrics.append(metrics)
+        for warning in warnings:
+            self._warning_counts[warning] = self._warning_counts.get(warning, 0) + 1
         return AnalysisResult(
             sequence=frame.sequence,
             timestampMs=frame.timestampMs,

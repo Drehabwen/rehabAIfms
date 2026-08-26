@@ -59,6 +59,39 @@ class TimelinePoint(BaseModel):
     maxValgusPercent: float
 
 
+class RepetitionSummary(BaseModel):
+    repId: int
+    startedAtMs: float
+    bottomAtMs: float
+    completedAtMs: float
+    durationMs: float
+    minKneeAngle: float
+
+
+class SessionEnd(BaseModel):
+    type: Literal["session-end-v1"]
+    durationMs: float = Field(ge=0)
+    repetitions: int = Field(ge=0)
+    partialRepetitions: int = Field(ge=0)
+    reps: list[RepetitionSummary]
+
+
+class SessionReport(BaseModel):
+    type: Literal["squat-session-report-v1"] = "squat-session-report-v1"
+    durationMs: float
+    repetitions: int
+    partialRepetitions: int
+    validFrameRate: float
+    averageKneeDistanceRatio: float | None
+    maxKneeAngleAsymmetry: float | None
+    maxCenterShiftPercent: float | None
+    maxValgusPercent: float | None
+    symmetryScore: float | None
+    warningCounts: dict[str, int]
+    timeline: list[TimelinePoint]
+    reps: list[RepetitionSummary]
+
+
 class AnalysisResult(BaseModel):
     type: Literal["squat-analysis-v1"] = "squat-analysis-v1"
     sequence: int
