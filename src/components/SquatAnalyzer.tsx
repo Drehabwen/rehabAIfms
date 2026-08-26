@@ -1,47 +1,16 @@
-import { useCallback, useMemo, useState } from 'react';
 import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { createInitialSquatState, squatGuidance } from '../features/squat/engine';
-import { parsePythonAnalysisMessage } from '../features/squat/frame';
 import { PoseCapture } from '../features/squat/PoseCapture';
-import { analyzePythonResult } from '../features/squat/remoteEngine';
-import type { SquatAnalysisState, SquatPhase } from '../features/squat/types';
+import type { SquatPhase } from '../features/squat/types';
+import { useSquatSession } from '../features/squat/useSquatSession';
+import { SquatLiveMetrics } from './SquatLiveMetrics';
 
 const PHASE_LABELS: Record<SquatPhase, string> = {
   'finding-subject': '校准中', standing: '站立', descending: '下蹲', bottom: '底部', ascending: '站起',
 };
 
-function Metric({ label, value, suffix = '' }: { label: string; value: string; suffix?: string }) {
-  return <View style={styles.metric}><Text style={styles.metricValue}>{value}{suffix}</Text><Text style={styles.metricLabel}>{label}</Text></View>;
-}
-
 export default function SquatAnalyzer() {
-  const [analysis, setAnalysis] = useState<SquatAnalysisState>(createInitialSquatState);
-  const [isAnalyzing, setIsAnalyzing] = useState(true);
-  const [messageErrors, setMessageErrors] = useState(0);
-
-  const handleMessage = useCallback((rawMessage: string) => {
-    if (!isAnalyzing) return;
-    const result = parsePythonAnalysisMessage(rawMessage);
-    if (!result) {
-      setMessageErrors((count) => count + 1);
-      return;
-    }
-    setAnalysis((state) => analyzePythonResult(state, result));
-  }, [isAnalyzing]);
-
-  const reset = useCallback(() => {
-    setAnalysis(createInitialSquatState());
-    setMessageErrors(0);
-    setIsAnalyzing(true);
-  }, []);
-
-  const validFrameRate = useMemo(() => analysis.totalFrames === 0
-    ? 0
-    : Math.round((analysis.validFrames / analysis.totalFrames) * 100), [analysis]);
-  const guidance = isAnalyzing ? squatGuidance(analysis) : '分析已暂停';
-  const kneeAngle = analysis.metrics ? Math.round(analysis.metrics.kneeAngle).toString() : '--';
-  const trunkLean = analysis.metrics ? Math.round(analysis.metrics.trunkLean).toString() : '--';
+  const { analysis, guidance, handleMessage, isAnalyzing, messageErrors, reset, toggle, validFrameRate } = useSquatSession();
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -62,19 +31,12 @@ export default function SquatAnalyzer() {
         <View style={styles.guidanceOverlay}><Text style={styles.guidanceText}>{guidance}</Text></View>
       </View>
 
-      <View style={styles.repCard}>
-        <View><Text style={styles.repLabel}>已完成</Text><Text style={styles.repValue}>{analysis.repetitions}</Text><Text style={styles.repUnit}>次完整深蹲</Text></View>
-        <View style={styles.metricsRow}>
-          <Metric label="膝角" value={kneeAngle} suffix="°" />
-          <Metric label="躯干倾斜" value={trunkLean} suffix="°" />
-          <Metric label="有效帧" value={validFrameRate.toString()} suffix="%" />
-        </View>
-      </View>
+      <SquatLiveMetrics analysis={analysis} validFrameRate={validFrameRate} />
 
       {(messageErrors > 0 || !analysis.quality.valid) && <Text style={styles.qualityNote}>{messageErrors > 0 ? `已忽略 ${messageErrors} 个格式错误的姿态帧` : '只有采集质量足够时才会计算动作次数'}</Text>}
       <View style={styles.controls}>
         <TouchableOpacity accessibilityRole="button" style={[styles.button, styles.secondaryButton]} onPress={reset}><Text style={styles.secondaryButtonText}>重新开始</Text></TouchableOpacity>
-        <TouchableOpacity accessibilityRole="button" style={[styles.button, styles.primaryButton]} onPress={() => setIsAnalyzing((value) => !value)}><Text style={styles.primaryButtonText}>{isAnalyzing ? '暂停分析' : '继续分析'}</Text></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" style={[styles.button, styles.primaryButton]} onPress={toggle}><Text style={styles.primaryButtonText}>{isAnalyzing ? '暂停分析' : '继续分析'}</Text></TouchableOpacity>
       </View>
       <Text style={styles.disclaimer}>实验性训练反馈，不构成医学诊断或治疗建议</Text>
     </SafeAreaView>
@@ -100,14 +62,6 @@ const styles = StyleSheet.create({
   frameBottomRight: { ...corner, borderBottomRightRadius: 14, borderBottomWidth: 2, borderRightWidth: 2, bottom: 0, right: 0 },
   guidanceOverlay: { alignItems: 'center', bottom: 18, left: 14, position: 'absolute', right: 14 },
   guidanceText: { backgroundColor: 'rgba(12, 24, 19, .82)', borderRadius: 12, color: '#FFFFFF', fontSize: 14, fontWeight: '700', overflow: 'hidden', paddingHorizontal: 14, paddingVertical: 10, textAlign: 'center' },
-  repCard: { alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 20, flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, paddingHorizontal: 18, paddingVertical: 15 },
-  repLabel: { color: '#738078', fontSize: 11, fontWeight: '600' },
-  repValue: { color: '#173C2D', fontSize: 38, fontWeight: '900', lineHeight: 42 },
-  repUnit: { color: '#516159', fontSize: 11 },
-  metricsRow: { flexDirection: 'row', gap: 8 },
-  metric: { alignItems: 'center', backgroundColor: '#F3F7F4', borderRadius: 12, minWidth: 68, paddingHorizontal: 8, paddingVertical: 9 },
-  metricValue: { color: '#1C4937', fontSize: 16, fontWeight: '800' },
-  metricLabel: { color: '#76837C', fontSize: 9, marginTop: 2 },
   qualityNote: { color: '#68766F', fontSize: 10, marginTop: 8, textAlign: 'center' },
   controls: { flexDirection: 'row', gap: 10, marginTop: 12 },
   button: { alignItems: 'center', borderRadius: 14, flex: 1, paddingVertical: 14 },

@@ -7,15 +7,21 @@
   },
   "scripts": {
     "start": "expo start",
+    "prestart": "npm run sync:pose",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
+    "preandroid": "npm run sync:pose",
     "ios": "expo start --ios",
+    "preios": "npm run sync:pose",
     "web": "expo start --web",
+    "preweb": "npm run sync:pose",
     "api": ".\\.venv\\Scripts\\python.exe -m uvicorn backend.app.main:app --reload --port 8765",
     "lint": "expo lint",
     "test": "jest",
     "test:coverage": "jest --coverage",
-    "test:python": ".\\.venv\\Scripts\\python.exe -m pytest backend/tests -q"
+    "test:python": ".\\.venv\\Scripts\\python.exe -m pytest backend/tests -q",
+    "sync:pose": "node scripts/sync-pose-html.js",
+    "test:pose": "node scripts/sync-pose-html.js --check"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",

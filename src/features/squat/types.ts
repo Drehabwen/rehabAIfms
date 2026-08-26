@@ -1,19 +1,3 @@
-export type BodySide = 'left' | 'right';
-
-export interface PoseLandmark {
-  x: number;
-  y: number;
-  z: number;
-  visibility?: number;
-}
-
-export interface PoseFrame {
-  version: 1;
-  sequence: number;
-  timestampMs: number;
-  landmarks: PoseLandmark[];
-}
-
 export type SquatPhase =
   | 'finding-subject'
   | 'standing'
@@ -29,7 +13,6 @@ export type CaptureIssue =
 export interface CaptureQuality {
   valid: boolean;
   score: number;
-  side?: BodySide;
   issue?: CaptureIssue;
 }
 
