@@ -25,3 +25,15 @@ def test_rejects_low_visibility_pose() -> None:
     assert not result.quality.valid
     assert result.metrics is None
     assert result.quality.issue == "low-visibility"
+
+
+def test_emits_one_second_timeline_aggregate() -> None:
+    analyzer = FrontalSquatAnalyzer()
+    first = pose_frame()
+    analyzer.analyze(first)
+    later = pose_frame(knee_inset=0.02)
+    later.sequence = 31
+    later.timestampMs = 1050
+    result = analyzer.analyze(later)
+    assert result.timelinePoint is not None
+    assert result.timelinePoint.second > 1

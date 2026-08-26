@@ -1,15 +1,12 @@
 import { useEffect, useRef } from 'react';
 
-import type { SquatAnalysisState } from './types';
-
 type PoseCaptureProps = {
   onFrameMessage: (message: string) => void;
   paused: boolean;
-  analysis: SquatAnalysisState;
 };
 
 // Metro replaces this file with PoseCapture.native.tsx for Android and iOS.
-export function PoseCapture({ onFrameMessage, paused, analysis }: PoseCaptureProps) {
+export function PoseCapture({ onFrameMessage, paused }: PoseCaptureProps) {
   const frameRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
@@ -27,19 +24,6 @@ export function PoseCapture({ onFrameMessage, paused, analysis }: PoseCapturePro
     window.addEventListener('message', receiveFrame);
     return () => window.removeEventListener('message', receiveFrame);
   }, [onFrameMessage, paused]);
-
-  useEffect(() => {
-    frameRef.current?.contentWindow?.postMessage(JSON.stringify({
-      type: 'squat-analysis',
-      phase: analysis.phase,
-      repetitions: analysis.repetitions,
-      kneeAngle: analysis.metrics?.kneeAngle,
-      validFrames: analysis.validFrames,
-      totalFrames: analysis.totalFrames,
-      qualityValid: analysis.quality.valid,
-      qualityIssue: analysis.quality.issue,
-    }), window.location.origin);
-  }, [analysis]);
 
   return (
     <iframe

@@ -51,6 +51,14 @@ class FrameAnalysis(BaseModel):
     warnings: list[str]
 
 
+class TimelinePoint(BaseModel):
+    second: float
+    kneeDistanceRatio: float
+    kneeAngleAsymmetry: float
+    centerShiftPercent: float
+    maxValgusPercent: float
+
+
 class AnalysisResult(BaseModel):
     type: Literal["squat-analysis-v1"] = "squat-analysis-v1"
     sequence: int
@@ -58,3 +66,4 @@ class AnalysisResult(BaseModel):
     quality: Quality
     metrics: FrontalMetrics | None
     analysis: FrameAnalysis
+    timelinePoint: TimelinePoint | None = None

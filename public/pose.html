@@ -2,70 +2,93 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>深蹲姿态捕捉</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>正面深蹲分析</title>
   <style>
-    :root{color-scheme:dark;font-family:system-ui,sans-serif}html,body{background:#101915;height:100%;margin:0;overflow:hidden}
-    #stage{height:100%;position:relative;width:100%}#video,#canvas{height:100%;inset:0;object-fit:cover;position:absolute;transform:scaleX(-1);width:100%}#canvas{pointer-events:none}
-    #start-screen{align-items:center;background:radial-gradient(circle at 50% 35%,#274437,#101915 70%);display:flex;flex-direction:column;inset:0;justify-content:center;padding:24px;position:absolute;text-align:center;z-index:3}
-    #start-screen[hidden]{display:none}h1{font-size:clamp(26px,5vw,42px);margin:0 0 10px}p{color:#b9cbc2;line-height:1.6;margin:0 0 26px;max-width:480px}
-    button{background:#29a66f;border:0;border-radius:999px;color:#fff;cursor:pointer;font-size:18px;font-weight:800;padding:16px 34px}
-    #status{background:rgba(10,20,16,.78);border-radius:999px;bottom:22px;color:#fff;font-size:14px;font-weight:700;left:50%;padding:10px 16px;position:absolute;transform:translateX(-50%);z-index:2;white-space:nowrap}
-    #status[data-error="true"]{background:rgba(138,38,38,.9)}
-    #analysis{display:flex;gap:10px;left:18px;position:absolute;top:18px;z-index:2}#analysis div{background:rgba(10,20,16,.78);border-radius:14px;min-width:72px;padding:10px 12px;text-align:center}#analysis strong{display:block;font-size:24px}#analysis span{color:#b9cbc2;font-size:11px}
+    :root{color-scheme:dark;font-family:"Segoe UI",system-ui,sans-serif;--ink:#07120e;--panel:rgba(7,18,14,.82);--mint:#62efad;--cyan:#64c9ff;--amber:#ffc857}
+    *{box-sizing:border-box}html,body,#stage{height:100%;margin:0;overflow:hidden;background:var(--ink)}
+    #video,#skeleton{height:100%;inset:0;object-fit:cover;position:absolute;transform:scaleX(-1);width:100%}#skeleton{pointer-events:none}
+    #start-screen{align-items:center;background:radial-gradient(circle at 50% 30%,#294c3d 0,#101c17 48%,#07120e 100%);display:flex;flex-direction:column;inset:0;justify-content:center;padding:28px;position:absolute;text-align:center;z-index:5}
+    #start-screen[hidden]{display:none}.eyebrow{color:var(--mint);font-size:11px;font-weight:800;letter-spacing:.22em;margin-bottom:14px}h1{font-size:clamp(34px,6vw,64px);letter-spacing:-.05em;margin:0 0 12px}p{color:#aec4ba;line-height:1.65;margin:0 0 28px;max-width:540px}
+    button{background:var(--mint);border:0;border-radius:999px;color:#062218;cursor:pointer;font-size:18px;font-weight:900;padding:17px 36px}button:focus-visible{outline:3px solid #fff;outline-offset:4px}
+    #hud{display:grid;gap:10px;grid-template-columns:repeat(4,minmax(74px,1fr));left:18px;position:absolute;right:18px;top:18px;z-index:3}.metric{backdrop-filter:blur(12px);background:var(--panel);border:1px solid rgba(255,255,255,.11);border-radius:15px;padding:10px 12px}.metric strong{display:block;font-size:clamp(20px,3vw,30px)}.metric span,.chart-label{color:#a9beb5;font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+    #trend-panel{backdrop-filter:blur(14px);background:var(--panel);border:1px solid rgba(255,255,255,.11);border-radius:18px;bottom:70px;padding:14px;position:absolute;right:18px;width:min(390px,calc(100% - 36px));z-index:3}#trend-head{align-items:center;display:flex;justify-content:space-between;margin-bottom:8px}#connection{align-items:center;color:#b5c8bf;display:flex;font-size:11px;gap:7px}#connection-dot{background:#708078;border-radius:50%;height:8px;width:8px}#connection[data-online="true"] #connection-dot{background:var(--mint);box-shadow:0 0 12px var(--mint)}svg{display:block;height:110px;width:100%}.grid{stroke:rgba(255,255,255,.1);stroke-width:1}.trace{fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-width:3}.legend{display:flex;gap:14px;margin-top:5px}.legend span{font-size:10px}.legend i{border-radius:3px;display:inline-block;height:3px;margin-right:5px;vertical-align:middle;width:14px}
+    #status{background:rgba(7,18,14,.9);border:1px solid rgba(255,255,255,.12);border-radius:999px;bottom:18px;color:#fff;font-size:13px;font-weight:750;left:50%;padding:10px 16px;position:absolute;transform:translateX(-50%);white-space:nowrap;z-index:4}#status[data-error="true"]{background:#762d2d}
+    @media(max-width:700px){#hud{grid-template-columns:repeat(2,1fr)}#trend-panel{bottom:68px}.metric strong{font-size:21px}}
   </style>
 </head>
 <body>
   <main id="stage">
-    <video id="video" playsinline autoplay muted></video><canvas id="canvas"></canvas>
-    <aside id="analysis"><div><strong id="reps">0</strong><span>完整次数</span></div><div><strong id="phase">待机</strong><span>动作阶段</span></div><div><strong id="knee">--°</strong><span>膝关节角</span></div><div><strong id="frames">0%</strong><span>有效帧</span></div></aside>
-    <div id="status">等待开始</div>
-    <section id="start-screen"><h1>深蹲姿态捕捉</h1><p>点击后进入全屏并调用本机摄像头。请让全身保持在画面内，系统会连续绘制骨骼并计算动作时序。</p><button id="start" type="button">开始捕捉</button></section>
+    <video id="video" playsinline autoplay muted></video><canvas id="skeleton"></canvas>
+    <section id="hud" aria-label="实时深蹲计数">
+      <div class="metric"><strong id="reps">0</strong><span>前端实时计数</span></div>
+      <div class="metric"><strong id="phase">待机</strong><span>动作阶段</span></div>
+      <div class="metric"><strong id="knee">--°</strong><span>平均膝角</span></div>
+      <div class="metric"><strong id="frames">0%</strong><span>有效帧率</span></div>
+    </section>
+    <section id="trend-panel" aria-label="Python逐秒分析">
+      <div id="trend-head"><div><b>逐秒动作分析</b><div class="chart-label">最近 20 秒 · Python 聚合</div></div><div id="connection" data-online="false"><i id="connection-dot"></i><span id="connection-text">等待连接</span></div></div>
+      <svg viewBox="0 0 360 110" preserveAspectRatio="none" role="img" aria-label="膝间距、重心偏移和膝内扣趋势">
+        <path class="grid" d="M0 27.5H360M0 55H360M0 82.5H360"/>
+        <polyline id="ratio-line" class="trace" stroke="#62efad"/>
+        <polyline id="shift-line" class="trace" stroke="#64c9ff"/>
+        <polyline id="valgus-line" class="trace" stroke="#ffc857"/>
+      </svg>
+      <div class="legend"><span><i style="background:#62efad"></i>膝间距比</span><span><i style="background:#64c9ff"></i>重心偏移</span><span><i style="background:#ffc857"></i>膝内扣</span></div>
+    </section>
+    <div id="status">点击开始后才会采集并发送分析数据</div>
+    <section id="start-screen"><div class="eyebrow">FRONTAL SQUAT · LIVE LAB</div><h1>正面深蹲分析</h1><p>前端即时计数，Python 每秒返回对称性、膝内扣与重心偏移趋势。视频始终留在浏览器，只发送骨骼关键点。</p><button id="start" type="button">开始分析</button></section>
   </main>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1675466124/drawing_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js"></script>
   <script>
-    const stage=document.getElementById('stage'),video=document.getElementById('video'),canvas=document.getElementById('canvas'),context=canvas.getContext('2d'),startScreen=document.getElementById('start-screen'),startButton=document.getElementById('start'),status=document.getElementById('status'),reps=document.getElementById('reps'),phase=document.getElementById('phase'),knee=document.getElementById('knee'),frames=document.getElementById('frames');
-    let camera,socket,running=false,enteredFullscreen=false,sequence=0;
-    function setStatus(message,error=false){status.textContent=message;status.dataset.error=String(error)}
-    function sendFrame(landmarks){
-      const message=JSON.stringify({version:1,sequence:sequence++,timestampMs:performance.now(),landmarks:landmarks.map(({x,y,z,visibility})=>({x,y,z,visibility}))});
-      if(socket?.readyState===WebSocket.OPEN)socket.send(message);
-    }
-    function connectAnalysis(){
-      if(socket?.readyState===WebSocket.OPEN)return Promise.resolve();
-      const configured=new URLSearchParams(location.search).get('analysisUrl');
-      const protocol=location.protocol==='https:'?'wss:':'ws:';
-      const url=configured||`${protocol}//${location.hostname}:8765/ws/squat`;
-      return new Promise((resolve,reject)=>{socket=new WebSocket(url);socket.addEventListener('open',resolve,{once:true});socket.addEventListener('error',()=>reject(new Error('analysis-service-unavailable')),{once:true});socket.addEventListener('message',event=>{if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(event.data);else if(window.parent!==window)window.parent.postMessage(event.data,window.location.origin)});socket.addEventListener('close',()=>{if(running)setStatus('分析服务已断开，请重新开始',true)})});
-    }
+    const $=id=>document.getElementById(id),stage=$('stage'),video=$('video'),canvas=$('skeleton'),ctx=canvas.getContext('2d'),startScreen=$('start-screen'),startButton=$('start'),status=$('status'),reps=$('reps'),phase=$('phase'),knee=$('knee'),frames=$('frames'),connection=$('connection'),connectionText=$('connection-text');
     const phaseLabels={'finding-subject':'校准','standing':'站立','descending':'下蹲','bottom':'底部','ascending':'站起'};
-    window.addEventListener('message',event=>{
-      if(event.origin!==window.location.origin||typeof event.data!=='string')return;
-      try{const result=JSON.parse(event.data);if(result.type!=='squat-analysis')return;reps.textContent=String(result.repetitions);phase.textContent=phaseLabels[result.phase]||result.phase;knee.textContent=Number.isFinite(result.kneeAngle)?Math.round(result.kneeAngle)+'°':'--°';frames.textContent=result.totalFrames?Math.round(result.validFrames/result.totalFrames*100)+'%':'0%';if(!result.qualityValid&&result.totalFrames>0)setStatus(result.qualityIssue==='low-visibility'?'请后退，确保全身入镜':'正在重新校准')}catch(_){}
-    });
+    let camera,socket,running=false,enteredFullscreen=false,sequence=0,series=[];
+    const counter={phase:'finding-subject',repetitions:0,stable:0,total:0,valid:0,angle:undefined};
+    function setStatus(text,error=false){status.textContent=text;status.dataset.error=String(error)}
+    function emit(message){const raw=JSON.stringify(message);if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(raw);else if(window.parent!==window)window.parent.postMessage(raw,window.location.origin)}
+    function angle(a,b,c){const ab=[a.x-b.x,a.y-b.y],cb=[c.x-b.x,c.y-b.y],den=Math.hypot(...ab)*Math.hypot(...cb);if(!den)return 180;return Math.acos(Math.max(-1,Math.min(1,(ab[0]*cb[0]+ab[1]*cb[1])/den)))*180/Math.PI}
+    function updateCounter(lm){
+      counter.total++;const required=[11,12,23,24,25,26,27,28],score=Math.min(...required.map(i=>lm[i]?.visibility??0));
+      if(score<.6){counter.phase='finding-subject';counter.stable=0;renderCounter();return}
+      counter.valid++;const raw=(angle(lm[23],lm[25],lm[27])+angle(lm[24],lm[26],lm[28]))/2;counter.angle=counter.angle===undefined?raw:.35*raw+.65*counter.angle;
+      const a=counter.angle,p=counter.phase;
+      if(p==='finding-subject'){counter.stable=a>=155?counter.stable+1:0;if(counter.stable>=3){counter.phase='standing';counter.stable=0}}
+      else if(p==='standing'&&a<145){counter.phase='descending';counter.stable=0}
+      else if(p==='descending'){if(a<=120){counter.stable++;if(counter.stable>=3){counter.phase='bottom';counter.stable=0}}else if(a>=155){counter.phase='standing';counter.stable=0}else counter.stable=0}
+      else if(p==='bottom'&&a>130){counter.phase='ascending';counter.stable=0}
+      else if(p==='ascending'){if(a>=155){counter.stable++;if(counter.stable>=3){counter.phase='standing';counter.stable=0;counter.repetitions++}}else if(a<=120){counter.phase='bottom';counter.stable=0}else counter.stable=0}
+      renderCounter();emit({type:'frontend-squat-state-v1',phase:counter.phase,repetitions:counter.repetitions,kneeAngle:counter.angle,totalFrames:counter.total,validFrames:counter.valid});
+    }
+    function renderCounter(){reps.textContent=counter.repetitions;phase.textContent=phaseLabels[counter.phase];knee.textContent=counter.angle===undefined?'--°':Math.round(counter.angle)+'°';frames.textContent=counter.total?Math.round(counter.valid/counter.total*100)+'%':'0%'}
+    function chartPoints(key,min,max){return series.map((point,index)=>{const x=series.length===1?0:index/(series.length-1)*360,y=105-(Math.max(min,Math.min(max,Math.abs(point[key])))-min)/(max-min)*95;return x.toFixed(1)+','+y.toFixed(1)}).join(' ')}
+    function renderChart(){ $('ratio-line').setAttribute('points',chartPoints('kneeDistanceRatio',.4,1.2));$('shift-line').setAttribute('points',chartPoints('centerShiftPercent',0,20));$('valgus-line').setAttribute('points',chartPoints('maxValgusPercent',0,15)) }
+    function handlePython(raw){emit(JSON.parse(raw));const result=JSON.parse(raw);if(result.timelinePoint){series.push(result.timelinePoint);series=series.slice(-20);renderChart()}if(result.analysis?.warnings?.includes('knee_valgus'))setStatus('分析提醒：双膝向外打开');else if(result.analysis?.warnings?.includes('lateral_weight_shift'))setStatus('分析提醒：保持身体居中');else setStatus('前端计数中 · Python 逐秒分析中')}
+    function connectAnalysis(){
+      const configured=new URLSearchParams(location.search).get('analysisUrl'),protocol=location.protocol==='https:'?'wss:':'ws:',url=configured||`${protocol}//${location.hostname}:8765/ws/squat`;
+      socket=new WebSocket(url);connection.dataset.online='false';connectionText.textContent='正在连接';
+      socket.addEventListener('open',()=>{connection.dataset.online='true';connectionText.textContent='分析在线';setStatus('已开始：前端计数 · Python 分析')});
+      socket.addEventListener('message',event=>handlePython(event.data));
+      socket.addEventListener('close',()=>{connection.dataset.online='false';connectionText.textContent='分析离线';if(running)setStatus('前端继续计数 · Python 分析已断开',true)});
+      socket.addEventListener('error',()=>{connection.dataset.online='false';connectionText.textContent='分析离线'});
+    }
+    function sendFrame(lm){if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify({version:1,sequence:sequence++,timestampMs:performance.now(),landmarks:lm.map(({x,y,z,visibility})=>({x,y,z,visibility}))}))}
     function onResults(results){
-      const width=video.videoWidth||1280,height=video.videoHeight||720;
-      if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height}
-      context.clearRect(0,0,width,height);
-      if(!results.poseLandmarks){setStatus('请让全身进入画面');return}
-      drawConnectors(context,results.poseLandmarks,POSE_CONNECTIONS,{color:'#63E6A5',lineWidth:4});
-      drawLandmarks(context,results.poseLandmarks,{color:'#FFFFFF',fillColor:'#1B9C68',lineWidth:2,radius:5});
-      setStatus('正在捕捉并实时计算');sendFrame(results.poseLandmarks);
+      const width=video.videoWidth||1280,height=video.videoHeight||720;if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height}ctx.clearRect(0,0,width,height);
+      if(!results.poseLandmarks){setStatus('请后退，让全身进入画面');return}
+      drawConnectors(ctx,results.poseLandmarks,POSE_CONNECTIONS,{color:'#62efad',lineWidth:4});drawLandmarks(ctx,results.poseLandmarks,{color:'#fff',fillColor:'#168a60',lineWidth:2,radius:5});
+      updateCounter(results.poseLandmarks);sendFrame(results.poseLandmarks);
     }
-    const pose=new Pose({locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`});
-    pose.setOptions({modelComplexity:1,smoothLandmarks:true,minDetectionConfidence:.5,minTrackingConfidence:.5,staticImageMode:false});pose.onResults(onResults);
-    async function startCapture(){
-      if(running)return;startButton.disabled=true;setStatus('正在启动摄像头…');
-      try{if(stage.requestFullscreen){await stage.requestFullscreen();enteredFullscreen=true}}catch(_){}
-      try{await connectAnalysis();camera=new Camera(video,{onFrame:async()=>pose.send({image:video}),width:1280,height:720,facingMode:'user'});await camera.start();running=true;startScreen.hidden=true;setStatus('请站到画面中央')}
-      catch(error){startButton.disabled=false;const message=error?.message==='analysis-service-unavailable'?'Python 分析服务未启动':error?.name==='NotReadableError'?'摄像头正被其他应用占用':error?.name==='NotAllowedError'?'请允许浏览器使用摄像头':'无法打开摄像头，请检查设备';setStatus(message,true);console.error('无法启动捕捉：',error)}
+    const pose=new Pose({locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`});pose.setOptions({modelComplexity:1,smoothLandmarks:true,minDetectionConfidence:.5,minTrackingConfidence:.5,staticImageMode:false});pose.onResults(onResults);
+    async function startAnalysis(){
+      if(running)return;startButton.disabled=true;setStatus('正在启动摄像头…');try{if(stage.requestFullscreen){await stage.requestFullscreen();enteredFullscreen=true}}catch(_){}
+      try{camera=new Camera(video,{onFrame:async()=>pose.send({image:video}),width:1280,height:720,facingMode:'user'});await camera.start();running=true;startScreen.hidden=true;connectAnalysis();setStatus('已开始前端计数，正在连接 Python…')}
+      catch(error){startButton.disabled=false;setStatus(error?.name==='NotReadableError'?'摄像头正被其他应用占用':error?.name==='NotAllowedError'?'请允许浏览器使用摄像头':'无法打开摄像头，请检查设备',true)}
     }
-    function stopCapture(){camera?.stop();socket?.close();running=false;startButton.disabled=false;startScreen.hidden=false;context.clearRect(0,0,canvas.width,canvas.height);setStatus('已停止捕捉')}
-    startButton.addEventListener('click',startCapture);
-    document.addEventListener('fullscreenchange',()=>{if(enteredFullscreen&&!document.fullscreenElement){enteredFullscreen=false;stopCapture()}});
-    window.addEventListener('pagehide',stopCapture);
+    function stop(){camera?.stop();socket?.close();running=false;startButton.disabled=false;startScreen.hidden=false;ctx.clearRect(0,0,canvas.width,canvas.height);setStatus('已停止分析')}
+    startButton.addEventListener('click',startAnalysis);document.addEventListener('fullscreenchange',()=>{if(enteredFullscreen&&!document.fullscreenElement){enteredFullscreen=false;stop()}});window.addEventListener('pagehide',stop);
   </script>
 </body>
 </html>

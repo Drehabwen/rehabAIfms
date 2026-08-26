@@ -1,6 +1,6 @@
 import math
 
-from .models import AnalysisResult, FrameAnalysis, FrontalMetrics, Landmark, PoseFrame, Quality
+from .models import AnalysisResult, FrameAnalysis, FrontalMetrics, Landmark, PoseFrame, Quality, TimelinePoint
 
 LEFT = {"shoulder": 11, "hip": 23, "knee": 25, "ankle": 27}
 RIGHT = {"shoulder": 12, "hip": 24, "knee": 26, "ankle": 28}
@@ -39,6 +39,27 @@ class FrontalSquatAnalyzer:
         self.min_visibility = min_visibility
         self.smoothing_alpha = smoothing_alpha
         self._knee_angle: float | None = None
+        self._started_at: float | None = None
+        self._window_started_at: float | None = None
+        self._window: list[FrontalMetrics] = []
+
+    def _timeline_point(self, timestamp_ms: float, metrics: FrontalMetrics) -> TimelinePoint | None:
+        self._started_at = timestamp_ms if self._started_at is None else self._started_at
+        self._window_started_at = timestamp_ms if self._window_started_at is None else self._window_started_at
+        self._window.append(metrics)
+        if timestamp_ms - self._window_started_at < 1000:
+            return None
+        count = len(self._window)
+        point = TimelinePoint(
+            second=(timestamp_ms - self._started_at) / 1000,
+            kneeDistanceRatio=sum(item.kneeDistanceRatio for item in self._window) / count,
+            kneeAngleAsymmetry=sum(item.kneeAngleAsymmetry for item in self._window) / count,
+            centerShiftPercent=sum(item.centerShiftPercent for item in self._window) / count,
+            maxValgusPercent=max(max(item.leftValgusPercent, item.rightValgusPercent) for item in self._window),
+        )
+        self._window = []
+        self._window_started_at = timestamp_ms
+        return point
 
     def analyze(self, frame: PoseFrame) -> AnalysisResult:
         score = min(frame.landmarks[index].visibility for index in REQUIRED)
@@ -118,4 +139,5 @@ class FrontalSquatAnalyzer:
                 symmetryScore=max(0, 100 - (asymmetry / 30) * 100),
                 warnings=warnings,
             ),
+            timelinePoint=self._timeline_point(frame.timestampMs, metrics),
         )

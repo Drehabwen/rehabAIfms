@@ -1,7 +1,7 @@
 import { createInitialSquatState, squatGuidance } from '../engine';
-import { parsePythonAnalysisMessage } from '../frame';
-import { analyzePythonResult } from '../remoteEngine';
-import type { PythonSquatAnalysis } from '../types';
+import { parseFrontendSquatMessage, parsePythonAnalysisMessage } from '../frame';
+import { applyFrontendCounter, applyPythonInsights } from '../remoteEngine';
+import type { FrontendSquatUpdate, PythonSquatAnalysis } from '../types';
 
 function pythonResult(angle: number, sequence: number, valid = true): PythonSquatAnalysis {
   return {
@@ -17,34 +17,21 @@ function pythonResult(angle: number, sequence: number, valid = true): PythonSqua
   };
 }
 
-function runAngles(angles: number[]) {
-  return angles.reduce(
-    (state, angle, sequence) => analyzePythonResult(state, pythonResult(angle, sequence)),
-    createInitialSquatState(),
-  );
+function frontendUpdate(repetitions: number, phase: FrontendSquatUpdate['phase'] = 'standing'): FrontendSquatUpdate {
+  return { type: 'frontend-squat-state-v1', phase, repetitions, kneeAngle: 165, totalFrames: 30, validFrames: 29 };
 }
 
 describe('frontend squat counter', () => {
-  it('counts a complete standing-bottom-standing cycle', () => {
-    const result = runAngles([170, 170, 170, 140, 125, 115, 115, 115, 135, 150, 165, 165, 165]);
-    expect(result.repetitions).toBe(1);
-    expect(result.phase).toBe('standing');
-  });
-
-  it('rejects a partial squat', () => {
-    expect(runAngles([170, 170, 170, 140, 130, 140, 165, 165, 165]).repetitions).toBe(0);
-  });
-
-  it('resets calibration on invalid Python analysis', () => {
-    const result = analyzePythonResult(runAngles([170, 170, 170]), pythonResult(170, 4, false));
-    expect(result.phase).toBe('finding-subject');
-    expect(result.quality.issue).toBe('low-visibility');
+  it('accepts the browser counter independently of Python', () => {
+    const result = applyFrontendCounter(createInitialSquatState(), frontendUpdate(2));
+    expect(result.repetitions).toBe(2);
+    expect(result.validFrames).toBe(29);
   });
 
   it('keeps Python metrics and warnings for presentation', () => {
     const input = pythonResult(130, 1);
     input.analysis.warnings = ['knee_valgus'];
-    const state = analyzePythonResult(createInitialSquatState(), input);
+    const state = applyPythonInsights(createInitialSquatState(), input);
     expect(state.metrics?.kneeDistanceRatio).toBe(0.9);
     expect(squatGuidance(state)).toContain('双膝向外');
   });
@@ -53,6 +40,10 @@ describe('frontend squat counter', () => {
 describe('Python response parser', () => {
   it('accepts the versioned response contract', () => {
     expect(parsePythonAnalysisMessage(JSON.stringify(pythonResult(160, 1)))?.metrics?.averageKneeAngle).toBe(160);
+  });
+
+  it('parses the independent frontend counter signal', () => {
+    expect(parseFrontendSquatMessage(JSON.stringify(frontendUpdate(3)))?.repetitions).toBe(3);
   });
 
   it('rejects malformed and raw landmark messages', () => {

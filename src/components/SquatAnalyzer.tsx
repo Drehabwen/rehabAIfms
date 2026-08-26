@@ -10,7 +10,7 @@ const PHASE_LABELS: Record<SquatPhase, string> = {
 };
 
 export default function SquatAnalyzer() {
-  const { analysis, guidance, handleMessage, isAnalyzing, messageErrors, reset, toggle, validFrameRate } = useSquatSession();
+  const { analysis, handleMessage, isAnalyzing, messageErrors, reset, toggle, validFrameRate } = useSquatSession();
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -23,12 +23,11 @@ export default function SquatAnalyzer() {
       </View>
 
       <View style={styles.cameraCard}>
-        <PoseCapture onFrameMessage={handleMessage} paused={!isAnalyzing} analysis={analysis} />
+        <PoseCapture onFrameMessage={handleMessage} paused={!isAnalyzing} />
         <View pointerEvents="none" style={styles.frameGuide}>
           <View style={styles.frameTopLeft} /><View style={styles.frameTopRight} />
           <View style={styles.frameBottomLeft} /><View style={styles.frameBottomRight} />
         </View>
-        <View style={styles.guidanceOverlay}><Text style={styles.guidanceText}>{guidance}</Text></View>
       </View>
 
       <SquatLiveMetrics analysis={analysis} validFrameRate={validFrameRate} />
@@ -60,8 +59,6 @@ const styles = StyleSheet.create({
   frameTopRight: { ...corner, borderRightWidth: 2, borderTopRightRadius: 14, borderTopWidth: 2, right: 0, top: 0 },
   frameBottomLeft: { ...corner, borderBottomLeftRadius: 14, borderBottomWidth: 2, borderLeftWidth: 2, bottom: 0, left: 0 },
   frameBottomRight: { ...corner, borderBottomRightRadius: 14, borderBottomWidth: 2, borderRightWidth: 2, bottom: 0, right: 0 },
-  guidanceOverlay: { alignItems: 'center', bottom: 18, left: 14, position: 'absolute', right: 14 },
-  guidanceText: { backgroundColor: 'rgba(12, 24, 19, .82)', borderRadius: 12, color: '#FFFFFF', fontSize: 14, fontWeight: '700', overflow: 'hidden', paddingHorizontal: 14, paddingVertical: 10, textAlign: 'center' },
   qualityNote: { color: '#68766F', fontSize: 10, marginTop: 8, textAlign: 'center' },
   controls: { flexDirection: 'row', gap: 10, marginTop: 12 },
   button: { alignItems: 'center', borderRadius: 14, flex: 1, paddingVertical: 14 },

@@ -52,6 +52,22 @@ export interface PythonSquatAnalysis {
     symmetryScore: number;
     warnings: string[];
   };
+  timelinePoint?: null | {
+    second: number;
+    kneeDistanceRatio: number;
+    kneeAngleAsymmetry: number;
+    centerShiftPercent: number;
+    maxValgusPercent: number;
+  };
+}
+
+export interface FrontendSquatUpdate {
+  type: 'frontend-squat-state-v1';
+  phase: SquatPhase;
+  repetitions: number;
+  kneeAngle: number;
+  totalFrames: number;
+  validFrames: number;
 }
 
 export interface SquatAnalysisState {

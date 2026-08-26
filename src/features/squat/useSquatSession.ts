@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 
-import { createInitialSquatState, squatGuidance } from './engine';
-import { parsePythonAnalysisMessage } from './frame';
-import { analyzePythonResult } from './remoteEngine';
+import { createInitialSquatState } from './engine';
+import { parseFrontendSquatMessage, parsePythonAnalysisMessage } from './frame';
+import { applyFrontendCounter, applyPythonInsights } from './remoteEngine';
 import type { SquatAnalysisState } from './types';
 
 export function useSquatSession() {
@@ -12,12 +12,17 @@ export function useSquatSession() {
 
   const handleMessage = useCallback((rawMessage: string) => {
     if (!isAnalyzing) return;
-    const result = parsePythonAnalysisMessage(rawMessage);
-    if (!result) {
+    const counter = parseFrontendSquatMessage(rawMessage);
+    if (counter) {
+      setAnalysis((state) => applyFrontendCounter(state, counter));
+      return;
+    }
+    const insights = parsePythonAnalysisMessage(rawMessage);
+    if (!insights) {
       setMessageErrors((count) => count + 1);
       return;
     }
-    setAnalysis((state) => analyzePythonResult(state, result));
+    setAnalysis((state) => applyPythonInsights(state, insights));
   }, [isAnalyzing]);
 
   const reset = useCallback(() => {
@@ -31,7 +36,6 @@ export function useSquatSession() {
 
   return {
     analysis,
-    guidance: isAnalyzing ? squatGuidance(analysis) : '分析已暂停',
     handleMessage,
     isAnalyzing,
     messageErrors,
