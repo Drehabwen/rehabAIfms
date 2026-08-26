@@ -1,50 +1,59 @@
-# Welcome to your Expo app 👋
+# rehabAIfms
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+我在 GitHub 上公开的第一个康复 AI 原型。项目始于 2025 年 9 月，尝试用手机摄像头、姿态估计和关节角度计算，为深蹲训练提供实时动作反馈。
 
-## Get started
+> 这是一个保留历史意义的早期实验项目，不是医疗诊断或已经验证的临床产品。当前康复产品开发已转向 [RehabScreenLab](https://github.com/Drehabwen/RehabScreenLab) 和 [QingYueRehabWorkbench](https://github.com/Drehabwen/QingYueRehabWorkbench)。
 
-1. Install dependencies
+## 它为什么重要
 
-   ```bash
-   npm install
-   ```
+这个项目第一次形成了后来 DeepRehab 主线中的几个核心问题：
 
-2. Start the app
+- 普通移动设备能否完成可用的动作采集？
+- 姿态关键点怎样转化为可解释的关节角度？
+- 实时反馈怎样帮助用户完成康复训练？
+- 一个动作评分怎样进入更完整的评估和随访流程？
 
-   ```bash
-   npx expo start
-   ```
+后来这些问题逐步演化为动作指标实验、现场筛查和康复工作台：
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```text
+rehabAIfms（实时深蹲反馈原型）
+  → rehab-motion-lab（指标与可复现计算）
+  → RehabScreenLab（现场多协议筛查）
+  → QingYueRehabWorkbench（临床审核、报告与随访）
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## 原型能力
 
-## Learn more
+- Expo / React Native 移动应用
+- 摄像头与 WebView 姿态采集实验
+- TensorFlow.js 姿态检测依赖
+- 三点关节角度计算
+- 深蹲动作分析和文字反馈
+- 角度计算单元测试
+- Android APK 构建工作流探索
 
-To learn more about developing your project with Expo, look at the following resources:
+## 本地运行
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```powershell
+npm install
+npx expo start
+```
 
-## Join the community
+运行测试：
 
-Join our community of developers creating universal apps.
+```powershell
+npm test
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## 仓库状态
+
+**Historical prototype / 历史原型。**
+
+仓库保留原始实现和提交历史，用来记录项目方向的起点。除安全性和可运行性维护外，不计划继续在这里扩展新的产品功能。
+
+## 医学与数据边界
+
+- 输出仅是实验性动作反馈，不构成医学诊断或治疗建议。
+- 未经过临床有效性、重测一致性或设备间一致性验证。
+- 不应上传或提交包含个人身份信息的训练视频与记录。
+- 实际康复评估必须由合格专业人员审核。
