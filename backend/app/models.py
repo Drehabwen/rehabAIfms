@@ -66,6 +66,7 @@ class RepetitionSummary(BaseModel):
     completedAtMs: float
     durationMs: float
     minKneeAngle: float
+    maxDepthPercent: float = 0
 
 
 class SessionEnd(BaseModel):

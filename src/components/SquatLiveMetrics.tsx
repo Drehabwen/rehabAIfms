@@ -7,14 +7,14 @@ function Metric({ label, value, suffix = '' }: { label: string; value: string; s
 }
 
 export function SquatLiveMetrics({ analysis, validFrameRate }: { analysis: SquatAnalysisState; validFrameRate: number }) {
-  const kneeAngle = analysis.metrics ? Math.round(analysis.metrics.kneeAngle).toString() : '--';
+  const depth = analysis.metrics?.depthPercent === undefined ? '--' : Math.round(analysis.metrics.depthPercent).toString();
   const centerShift = analysis.metrics ? Math.round(Math.abs(analysis.metrics.centerShiftPercent ?? 0)).toString() : '--';
 
   return (
     <View style={styles.card}>
       <View><Text style={styles.repLabel}>已完成</Text><Text style={styles.repValue}>{analysis.repetitions}</Text><Text style={styles.repUnit}>次完整深蹲</Text></View>
       <View style={styles.row}>
-        <Metric label="膝角" value={kneeAngle} suffix="°" />
+        <Metric label="下蹲幅度" value={depth} suffix="%" />
         <Metric label="中心偏移" value={centerShift} suffix="%" />
         <Metric label="有效帧" value={validFrameRate.toString()} suffix="%" />
       </View>

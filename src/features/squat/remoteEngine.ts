@@ -8,7 +8,7 @@ export function applyFrontendCounter(previous: SquatAnalysisState, update: Front
     totalFrames: update.totalFrames,
     validFrames: update.validFrames,
     smoothedKneeAngle: update.kneeAngle,
-    metrics: { ...previous.metrics, kneeAngle: update.kneeAngle, trunkLean: previous.metrics?.trunkLean ?? 0 },
+    metrics: { ...previous.metrics, kneeAngle: update.kneeAngle, depthPercent: update.depthPercent, trunkLean: previous.metrics?.trunkLean ?? 0 },
     quality: { valid: true, score: 1 },
   };
 }

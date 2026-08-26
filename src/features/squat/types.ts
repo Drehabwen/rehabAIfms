@@ -18,6 +18,7 @@ export interface CaptureQuality {
 
 export interface SquatMetrics {
   kneeAngle: number;
+  depthPercent?: number;
   trunkLean: number;
   kneeAsymmetry?: number;
   kneeDistanceRatio?: number;
@@ -66,6 +67,7 @@ export interface FrontendSquatUpdate {
   phase: SquatPhase;
   repetitions: number;
   kneeAngle: number;
+  depthPercent?: number;
   totalFrames: number;
   validFrames: number;
 }
