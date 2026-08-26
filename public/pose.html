@@ -12,11 +12,13 @@
     button{background:#29a66f;border:0;border-radius:999px;color:#fff;cursor:pointer;font-size:18px;font-weight:800;padding:16px 34px}
     #status{background:rgba(10,20,16,.78);border-radius:999px;bottom:22px;color:#fff;font-size:14px;font-weight:700;left:50%;padding:10px 16px;position:absolute;transform:translateX(-50%);z-index:2;white-space:nowrap}
     #status[data-error="true"]{background:rgba(138,38,38,.9)}
+    #analysis{display:flex;gap:10px;left:18px;position:absolute;top:18px;z-index:2}#analysis div{background:rgba(10,20,16,.78);border-radius:14px;min-width:72px;padding:10px 12px;text-align:center}#analysis strong{display:block;font-size:24px}#analysis span{color:#b9cbc2;font-size:11px}
   </style>
 </head>
 <body>
   <main id="stage">
     <video id="video" playsinline autoplay muted></video><canvas id="canvas"></canvas>
+    <aside id="analysis"><div><strong id="reps">0</strong><span>完整次数</span></div><div><strong id="phase">待机</strong><span>动作阶段</span></div><div><strong id="knee">--°</strong><span>膝关节角</span></div><div><strong id="frames">0%</strong><span>有效帧</span></div></aside>
     <div id="status">等待开始</div>
     <section id="start-screen"><h1>深蹲姿态捕捉</h1><p>点击后进入全屏并调用本机摄像头。请让全身保持在画面内，系统会连续绘制骨骼并计算动作时序。</p><button id="start" type="button">开始捕捉</button></section>
   </main>
@@ -24,13 +26,18 @@
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1675466124/drawing_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js"></script>
   <script>
-    const stage=document.getElementById('stage'),video=document.getElementById('video'),canvas=document.getElementById('canvas'),context=canvas.getContext('2d'),startScreen=document.getElementById('start-screen'),startButton=document.getElementById('start'),status=document.getElementById('status');
+    const stage=document.getElementById('stage'),video=document.getElementById('video'),canvas=document.getElementById('canvas'),context=canvas.getContext('2d'),startScreen=document.getElementById('start-screen'),startButton=document.getElementById('start'),status=document.getElementById('status'),reps=document.getElementById('reps'),phase=document.getElementById('phase'),knee=document.getElementById('knee'),frames=document.getElementById('frames');
     let camera,running=false,enteredFullscreen=false,sequence=0;
     function setStatus(message,error=false){status.textContent=message;status.dataset.error=String(error)}
     function sendFrame(landmarks){
       const message=JSON.stringify({version:1,sequence:sequence++,timestampMs:performance.now(),landmarks:landmarks.map(({x,y,z,visibility})=>({x,y,z,visibility}))});
       if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(message);else if(window.parent!==window)window.parent.postMessage(message,window.location.origin);
     }
+    const phaseLabels={'finding-subject':'校准','standing':'站立','descending':'下蹲','bottom':'底部','ascending':'站起'};
+    window.addEventListener('message',event=>{
+      if(event.origin!==window.location.origin||typeof event.data!=='string')return;
+      try{const result=JSON.parse(event.data);if(result.type!=='squat-analysis')return;reps.textContent=String(result.repetitions);phase.textContent=phaseLabels[result.phase]||result.phase;knee.textContent=Number.isFinite(result.kneeAngle)?Math.round(result.kneeAngle)+'°':'--°';frames.textContent=result.totalFrames?Math.round(result.validFrames/result.totalFrames*100)+'%':'0%';if(!result.qualityValid&&result.totalFrames>0)setStatus(result.qualityIssue==='low-visibility'?'请后退，确保全身入镜':'正在重新校准')}catch(_){}
+    });
     function onResults(results){
       const width=video.videoWidth||1280,height=video.videoHeight||720;
       if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height}

@@ -1,9 +1,12 @@
 import { StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 
+import type { SquatAnalysisState } from './types';
+
 type PoseCaptureProps = {
   onFrameMessage: (message: string) => void;
   paused: boolean;
+  analysis: SquatAnalysisState;
 };
 
 const POSE_HTML = require('../../../assets/pose.html');

@@ -19,8 +19,8 @@ export const DEFAULT_SQUAT_CONFIG: SquatEngineConfig = {
   stableFramesRequired: 3,
   standingEnterAngle: 155,
   standingExitAngle: 145,
-  bottomEnterAngle: 105,
-  bottomExitAngle: 115,
+  bottomEnterAngle: 120,
+  bottomExitAngle: 130,
   maxFrameGapMs: 750,
   smoothingAlpha: 0.35,
 };

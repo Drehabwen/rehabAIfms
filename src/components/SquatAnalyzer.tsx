@@ -53,7 +53,7 @@ export default function SquatAnalyzer() {
       </View>
 
       <View style={styles.cameraCard}>
-        <PoseCapture onFrameMessage={handleMessage} paused={!isAnalyzing} />
+        <PoseCapture onFrameMessage={handleMessage} paused={!isAnalyzing} analysis={analysis} />
         <View pointerEvents="none" style={styles.frameGuide}>
           <View style={styles.frameTopLeft} /><View style={styles.frameTopRight} />
           <View style={styles.frameBottomLeft} /><View style={styles.frameBottomRight} />
