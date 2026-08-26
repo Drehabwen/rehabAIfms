@@ -41,14 +41,17 @@
                         visibility: landmark.visibility
                     }));
                     
-                    // 通过postMessage发送关键点数据
+                    const message = JSON.stringify({
+                        version: 1,
+                        sequence: sequence++,
+                        timestampMs: performance.now(),
+                        landmarks: simplifiedLandmarks
+                    });
+
                     if (window.ReactNativeWebView) {
-                        window.ReactNativeWebView.postMessage(JSON.stringify({
-                            version: 1,
-                            sequence: sequence++,
-                            timestampMs: performance.now(),
-                            landmarks: simplifiedLandmarks
-                        }));
+                        window.ReactNativeWebView.postMessage(message);
+                    } else if (window.parent !== window) {
+                        window.parent.postMessage(message, window.location.origin);
                     }
                 }
             } catch (error) {

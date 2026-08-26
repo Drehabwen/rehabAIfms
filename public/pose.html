@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>深蹲姿态采集</title>
+    <style>
+        html, body { background: #17201c; height: 100%; margin: 0; overflow: hidden; }
+        #video, #canvas {
+            height: 100%; inset: 0; object-fit: cover; position: absolute;
+            transform: scaleX(-1); width: 100%;
+        }
+        #canvas { pointer-events: none; }
+    </style>
+</head>
+<body>
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="canvas"></canvas>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1626848346/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.4.1635989137/pose.js"></script>
+    <script>
+        const videoElement = document.getElementById('video');
+        let sequence = 0;
+
+        function onResults(results) {
+            if (!results.poseLandmarks) return;
+
+            const message = JSON.stringify({
+                version: 1,
+                sequence: sequence++,
+                timestampMs: performance.now(),
+                landmarks: results.poseLandmarks.map(({ x, y, z, visibility }) => ({
+                    x, y, z, visibility
+                }))
+            });
+
+            if (window.parent !== window) {
+                window.parent.postMessage(message, window.location.origin);
+            }
+        }
+
+        const pose = new Pose({
+            locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.4.1635989137/${file}`
+        });
+        pose.setOptions({
+            modelComplexity: 1,
+            smoothLandmarks: true,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5,
+            staticImageMode: false
+        });
+        pose.onResults(onResults);
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => pose.send({ image: videoElement }),
+            width: 1280,
+            height: 720,
+            facingMode: 'user'
+        });
+        camera.start().catch(error => console.error('无法启动摄像头：', error));
+    </script>
+</body>
+</html>

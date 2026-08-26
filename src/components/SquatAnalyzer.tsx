@@ -1,12 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
 import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
 import { analyzeSquatFrame, createInitialSquatState, squatGuidance } from '../features/squat/engine';
 import { parsePoseFrameMessage } from '../features/squat/frame';
+import { PoseCapture } from '../features/squat/PoseCapture';
 import type { SquatAnalysisState, SquatPhase } from '../features/squat/types';
-
-const POSE_HTML = require('../../assets/pose.html');
 
 const PHASE_LABELS: Record<SquatPhase, string> = {
   'finding-subject': '校准中', standing: '站立', descending: '下蹲', bottom: '底部', ascending: '站起',
@@ -21,9 +19,9 @@ export default function SquatAnalyzer() {
   const [isAnalyzing, setIsAnalyzing] = useState(true);
   const [messageErrors, setMessageErrors] = useState(0);
 
-  const handleMessage = useCallback((event: WebViewMessageEvent) => {
+  const handleMessage = useCallback((rawMessage: string) => {
     if (!isAnalyzing) return;
-    const frame = parsePoseFrameMessage(event.nativeEvent.data);
+    const frame = parsePoseFrameMessage(rawMessage);
     if (!frame) {
       setMessageErrors((count) => count + 1);
       return;
@@ -55,7 +53,7 @@ export default function SquatAnalyzer() {
       </View>
 
       <View style={styles.cameraCard}>
-        <WebView source={POSE_HTML} style={styles.webView} onMessage={handleMessage} javaScriptEnabled domStorageEnabled mediaPlaybackRequiresUserAction={false} allowsInlineMediaPlayback />
+        <PoseCapture onFrameMessage={handleMessage} paused={!isAnalyzing} />
         <View pointerEvents="none" style={styles.frameGuide}>
           <View style={styles.frameTopLeft} /><View style={styles.frameTopRight} />
           <View style={styles.frameBottomLeft} /><View style={styles.frameBottomRight} />
@@ -94,7 +92,6 @@ const styles = StyleSheet.create({
   statusDotReady: { backgroundColor: '#19734C' },
   statusText: { color: '#31443C', fontSize: 12, fontWeight: '700' },
   cameraCard: { backgroundColor: '#17201C', borderRadius: 22, flex: 1, minHeight: 310, overflow: 'hidden' },
-  webView: { backgroundColor: '#17201C', flex: 1 },
   frameGuide: { bottom: 28, left: 28, position: 'absolute', right: 28, top: 28 },
   frameTopLeft: { ...corner, borderLeftWidth: 2, borderTopLeftRadius: 14, borderTopWidth: 2, left: 0, top: 0 },
   frameTopRight: { ...corner, borderRightWidth: 2, borderTopRightRadius: 14, borderTopWidth: 2, right: 0, top: 0 },
