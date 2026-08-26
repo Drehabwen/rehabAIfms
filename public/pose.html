@@ -27,11 +27,18 @@
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js"></script>
   <script>
     const stage=document.getElementById('stage'),video=document.getElementById('video'),canvas=document.getElementById('canvas'),context=canvas.getContext('2d'),startScreen=document.getElementById('start-screen'),startButton=document.getElementById('start'),status=document.getElementById('status'),reps=document.getElementById('reps'),phase=document.getElementById('phase'),knee=document.getElementById('knee'),frames=document.getElementById('frames');
-    let camera,running=false,enteredFullscreen=false,sequence=0;
+    let camera,socket,running=false,enteredFullscreen=false,sequence=0;
     function setStatus(message,error=false){status.textContent=message;status.dataset.error=String(error)}
     function sendFrame(landmarks){
       const message=JSON.stringify({version:1,sequence:sequence++,timestampMs:performance.now(),landmarks:landmarks.map(({x,y,z,visibility})=>({x,y,z,visibility}))});
-      if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(message);else if(window.parent!==window)window.parent.postMessage(message,window.location.origin);
+      if(socket?.readyState===WebSocket.OPEN)socket.send(message);
+    }
+    function connectAnalysis(){
+      if(socket?.readyState===WebSocket.OPEN)return Promise.resolve();
+      const configured=new URLSearchParams(location.search).get('analysisUrl');
+      const protocol=location.protocol==='https:'?'wss:':'ws:';
+      const url=configured||`${protocol}//${location.hostname}:8765/ws/squat`;
+      return new Promise((resolve,reject)=>{socket=new WebSocket(url);socket.addEventListener('open',resolve,{once:true});socket.addEventListener('error',()=>reject(new Error('analysis-service-unavailable')),{once:true});socket.addEventListener('message',event=>{if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(event.data);else if(window.parent!==window)window.parent.postMessage(event.data,window.location.origin)});socket.addEventListener('close',()=>{if(running)setStatus('分析服务已断开，请重新开始',true)})});
     }
     const phaseLabels={'finding-subject':'校准','standing':'站立','descending':'下蹲','bottom':'底部','ascending':'站起'};
     window.addEventListener('message',event=>{
@@ -52,10 +59,10 @@
     async function startCapture(){
       if(running)return;startButton.disabled=true;setStatus('正在启动摄像头…');
       try{if(stage.requestFullscreen){await stage.requestFullscreen();enteredFullscreen=true}}catch(_){}
-      try{camera=new Camera(video,{onFrame:async()=>pose.send({image:video}),width:1280,height:720,facingMode:'user'});await camera.start();running=true;startScreen.hidden=true;setStatus('请站到画面中央')}
-      catch(error){startButton.disabled=false;const message=error?.name==='NotReadableError'?'摄像头正被其他应用占用':error?.name==='NotAllowedError'?'请允许浏览器使用摄像头':'无法打开摄像头，请检查设备';setStatus(message,true);console.error('无法启动摄像头：',error)}
+      try{await connectAnalysis();camera=new Camera(video,{onFrame:async()=>pose.send({image:video}),width:1280,height:720,facingMode:'user'});await camera.start();running=true;startScreen.hidden=true;setStatus('请站到画面中央')}
+      catch(error){startButton.disabled=false;const message=error?.message==='analysis-service-unavailable'?'Python 分析服务未启动':error?.name==='NotReadableError'?'摄像头正被其他应用占用':error?.name==='NotAllowedError'?'请允许浏览器使用摄像头':'无法打开摄像头，请检查设备';setStatus(message,true);console.error('无法启动捕捉：',error)}
     }
-    function stopCapture(){if(!running)return;camera?.stop();running=false;startButton.disabled=false;startScreen.hidden=false;context.clearRect(0,0,canvas.width,canvas.height);setStatus('已停止捕捉')}
+    function stopCapture(){camera?.stop();socket?.close();running=false;startButton.disabled=false;startScreen.hidden=false;context.clearRect(0,0,canvas.width,canvas.height);setStatus('已停止捕捉')}
     startButton.addEventListener('click',startCapture);
     document.addEventListener('fullscreenchange',()=>{if(enteredFullscreen&&!document.fullscreenElement){enteredFullscreen=false;stopCapture()}});
     window.addEventListener('pagehide',stopCapture);

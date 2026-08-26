@@ -47,13 +47,24 @@ rehabAIfms（实时深蹲反馈原型）
 
 ```powershell
 npm install
-npx expo start
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+npm run api
 ```
+
+另开一个终端启动 Web 前端：
+
+```powershell
+npm run web
+```
+
+浏览器只在本地执行摄像头采集和骨骼绘制，并通过 WebSocket 将 33 个姿态关键点发送给 FastAPI；原始视频不会发送到 Python 服务。FastAPI 负责正面深蹲的角度、对称性、膝内扣、身体中心侧移等指标，前端负责动作计数、提醒和可视化。
 
 运行测试：
 
 ```powershell
 npm test
+npm run test:python
 ```
 
 ## 仓库状态

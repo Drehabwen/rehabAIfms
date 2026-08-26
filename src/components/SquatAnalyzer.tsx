@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
 import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { analyzeSquatFrame, createInitialSquatState, squatGuidance } from '../features/squat/engine';
-import { parsePoseFrameMessage } from '../features/squat/frame';
+import { createInitialSquatState, squatGuidance } from '../features/squat/engine';
+import { parsePythonAnalysisMessage } from '../features/squat/frame';
 import { PoseCapture } from '../features/squat/PoseCapture';
+import { analyzePythonResult } from '../features/squat/remoteEngine';
 import type { SquatAnalysisState, SquatPhase } from '../features/squat/types';
 
 const PHASE_LABELS: Record<SquatPhase, string> = {
@@ -21,12 +22,12 @@ export default function SquatAnalyzer() {
 
   const handleMessage = useCallback((rawMessage: string) => {
     if (!isAnalyzing) return;
-    const frame = parsePoseFrameMessage(rawMessage);
-    if (!frame) {
+    const result = parsePythonAnalysisMessage(rawMessage);
+    if (!result) {
       setMessageErrors((count) => count + 1);
       return;
     }
-    setAnalysis((state) => analyzeSquatFrame(state, frame));
+    setAnalysis((state) => analyzePythonResult(state, result));
   }, [isAnalyzing]);
 
   const reset = useCallback(() => {

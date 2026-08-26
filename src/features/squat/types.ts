@@ -37,6 +37,38 @@ export interface SquatMetrics {
   kneeAngle: number;
   trunkLean: number;
   kneeAsymmetry?: number;
+  kneeDistanceRatio?: number;
+  leftValgusPercent?: number;
+  rightValgusPercent?: number;
+  pelvisTiltDeg?: number;
+  shoulderTiltDeg?: number;
+  centerShiftPercent?: number;
+}
+
+export interface PythonSquatAnalysis {
+  type: 'squat-analysis-v1';
+  sequence: number;
+  timestampMs: number;
+  quality: { valid: boolean; score: number; issue?: string };
+  metrics: null | {
+    leftKneeAngle: number;
+    rightKneeAngle: number;
+    averageKneeAngle: number;
+    kneeAngleAsymmetry: number;
+    kneeDistanceRatio: number;
+    leftValgusPercent: number;
+    rightValgusPercent: number;
+    pelvisTiltDeg: number;
+    shoulderTiltDeg: number;
+    trunkLateralLeanDeg: number;
+    centerShiftPercent: number;
+  };
+  analysis: {
+    motion: string;
+    depthProgress: number;
+    symmetryScore: number;
+    warnings: string[];
+  };
 }
 
 export interface SquatAnalysisState {

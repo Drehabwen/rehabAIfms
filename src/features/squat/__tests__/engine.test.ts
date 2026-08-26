@@ -1,6 +1,7 @@
 import { analyzeSquatFrame, createInitialSquatState } from '../engine';
-import { parsePoseFrameMessage } from '../frame';
-import type { PoseFrame, PoseLandmark, SquatAnalysisState } from '../types';
+import { parsePoseFrameMessage, parsePythonAnalysisMessage } from '../frame';
+import { analyzePythonResult } from '../remoteEngine';
+import type { PoseFrame, PoseLandmark, PythonSquatAnalysis, SquatAnalysisState } from '../types';
 
 function landmarksForAngle(angleDegrees: number, visibility = 0.95): PoseLandmark[] {
   const landmarks = Array.from({ length: 33 }, () => ({
@@ -118,5 +119,35 @@ describe('pose frame parser', () => {
   it('rejects malformed and legacy messages', () => {
     expect(parsePoseFrameMessage('not-json')).toBeNull();
     expect(parsePoseFrameMessage(JSON.stringify(landmarksForAngle(160)))).toBeNull();
+  });
+});
+
+function pythonResult(angle: number, sequence: number): PythonSquatAnalysis {
+  return {
+    type: 'squat-analysis-v1', sequence, timestampMs: sequence * 33,
+    quality: { valid: true, score: 0.95 },
+    metrics: {
+      leftKneeAngle: angle, rightKneeAngle: angle, averageKneeAngle: angle,
+      kneeAngleAsymmetry: 0, kneeDistanceRatio: 0.9,
+      leftValgusPercent: 2, rightValgusPercent: 2, pelvisTiltDeg: 1,
+      shoulderTiltDeg: 1, trunkLateralLeanDeg: 2, centerShiftPercent: 3,
+    },
+    analysis: { motion: 'holding', depthProgress: 0.5, symmetryScore: 100, warnings: [] },
+  };
+}
+
+describe('Python analysis integration', () => {
+  it('counts a complete repetition from Python metrics', () => {
+    const angles = [170, 170, 170, 140, 125, 115, 115, 115, 135, 150, 165, 165, 165];
+    const result = angles.reduce(
+      (state, angle, sequence) => analyzePythonResult(state, pythonResult(angle, sequence)),
+      createInitialSquatState(),
+    );
+    expect(result.repetitions).toBe(1);
+    expect(result.metrics?.kneeDistanceRatio).toBe(0.9);
+  });
+
+  it('parses the versioned Python response', () => {
+    expect(parsePythonAnalysisMessage(JSON.stringify(pythonResult(160, 1)))?.metrics?.averageKneeAngle).toBe(160);
   });
 });
