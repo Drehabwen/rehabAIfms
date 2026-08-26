@@ -1,217 +1,121 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { WebView } from 'react-native-webview';
-import { Landmark, calculateAngle } from '../utils/angleUtils';
+import { useCallback, useMemo, useState } from 'react';
+import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { WebView, type WebViewMessageEvent } from 'react-native-webview';
+
+import { analyzeSquatFrame, createInitialSquatState, squatGuidance } from '../features/squat/engine';
+import { parsePoseFrameMessage } from '../features/squat/frame';
+import type { SquatAnalysisState, SquatPhase } from '../features/squat/types';
 
 const POSE_HTML = require('../../assets/pose.html');
 
-const SquatAnalyzer: React.FC = () => {
-  const [feedback, setFeedback] = useState<string>('等待检测中...');
-  const [repCount, setRepCount] = useState<number>(0);
-  const [landmarks, setLandmarks] = useState<Landmark[] | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(true);
-  const [prevKneeAngle, setPrevKneeAngle] = useState<number | null>(null);
-  const webViewRef = useRef<WebView>(null);
-  const lastRepTime = useRef<number>(0);
-
-  // 根据FMS标准分析深蹲动作
-  useEffect(() => {
-    if (!landmarks || !isAnalyzing) {
-      if (!isAnalyzing) {
-        setFeedback('分析已停止');
-      } else {
-        setFeedback('等待检测中...');
-      }
-      return;
-    }
-
-    try {
-      // MediaPipe Pose关键点索引:
-      // 0: 鼻子, 11: 左肩, 12: 右肩, 23: 左髋, 24: 右髋
-      // 25: 左膝, 26: 右膝, 27: 左踝, 28: 右踝
-
-      // 使用左侧身体关键点进行分析（也可以使用右侧）
-      const leftHip = landmarks[23];
-      const leftKnee = landmarks[25];
-      const leftAnkle = landmarks[27];
-      const leftShoulder = landmarks[11];
-
-      // 检查关键点是否都存在
-      if (!leftHip || !leftKnee || !leftAnkle || !leftShoulder) {
-        setFeedback('身体关键点检测不完整');
-        return;
-      }
-
-      // 计算膝关节角度 (髋-膝-踝)
-      const kneeAngle = calculateAngle(leftHip, leftKnee, leftAnkle);
-      
-      // 计算躯干前倾角度 (肩-髋连线与垂直方向的夹角)
-      const trunkAngle = calculateAngle(
-        { x: leftShoulder.x, y: leftShoulder.y - 1, z: 0 }, // 垂直向上的参考点
-        leftShoulder,
-        leftHip
-      );
-
-      // 深蹲计数逻辑
-      const now = Date.now();
-      if (prevKneeAngle !== null && now - lastRepTime.current > 1000) {
-        // 检测深蹲过渡: 站立 -> 下蹲 -> 站立
-        if (prevKneeAngle > 160 && kneeAngle < 100) {
-          // 过渡到下蹲位置
-          lastRepTime.current = now;
-        } else if (prevKneeAngle < 100 && kneeAngle > 160) {
-          // 回到站立位置 - 计数一次深蹲
-          setRepCount(prev => prev + 1);
-          lastRepTime.current = now;
-        }
-      }
-      
-      setPrevKneeAngle(kneeAngle);
-
-      // 根据FMS标准进行评估
-      if (kneeAngle < 70) {
-        setFeedback('膝盖弯曲过度');
-      } else if (kneeAngle > 140) {
-        setFeedback('蹲得不够低');
-      } else if (trunkAngle > 30) {
-        setFeedback('背部前倾过多');
-      } else {
-        setFeedback('动作标准');
-      }
-    } catch (error) {
-      setFeedback('分析过程中出现错误');
-      console.error('Error analyzing pose:', error);
-    }
-  }, [landmarks, isAnalyzing, prevKneeAngle]);
-
-  // 处理从WebView接收到的消息
-  const handleWebViewMessage = (event: { nativeEvent: { data: string } }) => {
-    try {
-      const data = JSON.parse(event.nativeEvent.data);
-      if (Array.isArray(data)) {
-        setLandmarks(data as Landmark[]);
-      }
-    } catch (error) {
-      console.error('Error parsing WebView message:', error);
-    }
-  };
-
-  const toggleAnalysis = () => {
-    setIsAnalyzing(!isAnalyzing);
-    if (!isAnalyzing) {
-      setFeedback('开始分析...');
-    } else {
-      setFeedback('分析已停止');
-    }
-  };
-
-  const resetAnalysis = () => {
-    setRepCount(0);
-    setFeedback('等待检测中...');
-    setPrevKneeAngle(null);
-    lastRepTime.current = 0;
-  };
-
-  return (
-    <View style={styles.container}>
-      <WebView
-        ref={webViewRef}
-        source={POSE_HTML}
-        style={styles.webViewContainer}
-        onMessage={handleWebViewMessage}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-      />
-      <View style={styles.feedbackContainer}>
-        <Text style={styles.feedbackText}>{feedback}</Text>
-        <Text style={styles.repCountText}>次数: {repCount}</Text>
-      </View>
-      
-      {/* Control buttons */}
-      <View style={styles.controlsContainer}>
-        <TouchableOpacity 
-          style={[styles.controlButton, isAnalyzing ? styles.stopButton : styles.startButton]}
-          onPress={toggleAnalysis}
-        >
-          <Text style={styles.buttonText}>
-            {isAnalyzing ? '停止分析' : '开始分析'}
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity 
-          style={[styles.controlButton, styles.resetButton]}
-          onPress={resetAnalysis}
-        >
-          <Text style={styles.buttonText}>重置</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+const PHASE_LABELS: Record<SquatPhase, string> = {
+  'finding-subject': '校准中', standing: '站立', descending: '下蹲', bottom: '底部', ascending: '站起',
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: 'black',
-  },
-  webViewContainer: {
-    flex: 1,
-    backgroundColor: 'black',
-  },
-  feedbackContainer: {
-    position: 'absolute',
-    top: 50,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  feedbackText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    padding: 10,
-    borderRadius: 10,
-  },
-  repCountText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    padding: 10,
-    borderRadius: 10,
-    marginTop: 10,
-  },
-  controlsContainer: {
-    position: 'absolute',
-    bottom: 50,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-  },
-  controlButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 25,
-    minWidth: 100,
-    alignItems: 'center',
-  },
-  startButton: {
-    backgroundColor: '#4CAF50',
-  },
-  stopButton: {
-    backgroundColor: '#F44336',
-  },
-  resetButton: {
-    backgroundColor: '#2196F3',
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-});
+function Metric({ label, value, suffix = '' }: { label: string; value: string; suffix?: string }) {
+  return <View style={styles.metric}><Text style={styles.metricValue}>{value}{suffix}</Text><Text style={styles.metricLabel}>{label}</Text></View>;
+}
 
-export default SquatAnalyzer;
+export default function SquatAnalyzer() {
+  const [analysis, setAnalysis] = useState<SquatAnalysisState>(createInitialSquatState);
+  const [isAnalyzing, setIsAnalyzing] = useState(true);
+  const [messageErrors, setMessageErrors] = useState(0);
+
+  const handleMessage = useCallback((event: WebViewMessageEvent) => {
+    if (!isAnalyzing) return;
+    const frame = parsePoseFrameMessage(event.nativeEvent.data);
+    if (!frame) {
+      setMessageErrors((count) => count + 1);
+      return;
+    }
+    setAnalysis((state) => analyzeSquatFrame(state, frame));
+  }, [isAnalyzing]);
+
+  const reset = useCallback(() => {
+    setAnalysis(createInitialSquatState());
+    setMessageErrors(0);
+    setIsAnalyzing(true);
+  }, []);
+
+  const validFrameRate = useMemo(() => analysis.totalFrames === 0
+    ? 0
+    : Math.round((analysis.validFrames / analysis.totalFrames) * 100), [analysis]);
+  const guidance = isAnalyzing ? squatGuidance(analysis) : '分析已暂停';
+  const kneeAngle = analysis.metrics ? Math.round(analysis.metrics.kneeAngle).toString() : '--';
+  const trunkLean = analysis.metrics ? Math.round(analysis.metrics.trunkLean).toString() : '--';
+
+  return (
+    <SafeAreaView style={styles.screen}>
+      <View style={styles.header}>
+        <View><Text style={styles.eyebrow}>REHABAIFMS · SQUAT V2</Text><Text style={styles.title}>深蹲训练</Text></View>
+        <View style={[styles.statusPill, analysis.quality.valid && styles.statusPillReady]}>
+          <View style={[styles.statusDot, analysis.quality.valid && styles.statusDotReady]} />
+          <Text style={styles.statusText}>{PHASE_LABELS[analysis.phase]}</Text>
+        </View>
+      </View>
+
+      <View style={styles.cameraCard}>
+        <WebView source={POSE_HTML} style={styles.webView} onMessage={handleMessage} javaScriptEnabled domStorageEnabled mediaPlaybackRequiresUserAction={false} allowsInlineMediaPlayback />
+        <View pointerEvents="none" style={styles.frameGuide}>
+          <View style={styles.frameTopLeft} /><View style={styles.frameTopRight} />
+          <View style={styles.frameBottomLeft} /><View style={styles.frameBottomRight} />
+        </View>
+        <View style={styles.guidanceOverlay}><Text style={styles.guidanceText}>{guidance}</Text></View>
+      </View>
+
+      <View style={styles.repCard}>
+        <View><Text style={styles.repLabel}>已完成</Text><Text style={styles.repValue}>{analysis.repetitions}</Text><Text style={styles.repUnit}>次完整深蹲</Text></View>
+        <View style={styles.metricsRow}>
+          <Metric label="膝角" value={kneeAngle} suffix="°" />
+          <Metric label="躯干倾斜" value={trunkLean} suffix="°" />
+          <Metric label="有效帧" value={validFrameRate.toString()} suffix="%" />
+        </View>
+      </View>
+
+      {(messageErrors > 0 || !analysis.quality.valid) && <Text style={styles.qualityNote}>{messageErrors > 0 ? `已忽略 ${messageErrors} 个格式错误的姿态帧` : '只有采集质量足够时才会计算动作次数'}</Text>}
+      <View style={styles.controls}>
+        <TouchableOpacity accessibilityRole="button" style={[styles.button, styles.secondaryButton]} onPress={reset}><Text style={styles.secondaryButtonText}>重新开始</Text></TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" style={[styles.button, styles.primaryButton]} onPress={() => setIsAnalyzing((value) => !value)}><Text style={styles.primaryButtonText}>{isAnalyzing ? '暂停分析' : '继续分析'}</Text></TouchableOpacity>
+      </View>
+      <Text style={styles.disclaimer}>实验性训练反馈，不构成医学诊断或治疗建议</Text>
+    </SafeAreaView>
+  );
+}
+
+const corner = { borderColor: '#DDF6E8', height: 34, position: 'absolute' as const, width: 34 };
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: '#F3F5F2', paddingHorizontal: 18, paddingTop: 12 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  eyebrow: { color: '#5B746A', fontSize: 10, fontWeight: '700', letterSpacing: 1.4 },
+  title: { color: '#14241E', fontSize: 28, fontWeight: '800', marginTop: 2 },
+  statusPill: { alignItems: 'center', backgroundColor: '#E6EAE7', borderRadius: 18, flexDirection: 'row', gap: 7, paddingHorizontal: 12, paddingVertical: 8 },
+  statusPillReady: { backgroundColor: '#DDEFE6' },
+  statusDot: { backgroundColor: '#89968F', borderRadius: 4, height: 8, width: 8 },
+  statusDotReady: { backgroundColor: '#19734C' },
+  statusText: { color: '#31443C', fontSize: 12, fontWeight: '700' },
+  cameraCard: { backgroundColor: '#17201C', borderRadius: 22, flex: 1, minHeight: 310, overflow: 'hidden' },
+  webView: { backgroundColor: '#17201C', flex: 1 },
+  frameGuide: { bottom: 28, left: 28, position: 'absolute', right: 28, top: 28 },
+  frameTopLeft: { ...corner, borderLeftWidth: 2, borderTopLeftRadius: 14, borderTopWidth: 2, left: 0, top: 0 },
+  frameTopRight: { ...corner, borderRightWidth: 2, borderTopRightRadius: 14, borderTopWidth: 2, right: 0, top: 0 },
+  frameBottomLeft: { ...corner, borderBottomLeftRadius: 14, borderBottomWidth: 2, borderLeftWidth: 2, bottom: 0, left: 0 },
+  frameBottomRight: { ...corner, borderBottomRightRadius: 14, borderBottomWidth: 2, borderRightWidth: 2, bottom: 0, right: 0 },
+  guidanceOverlay: { alignItems: 'center', bottom: 18, left: 14, position: 'absolute', right: 14 },
+  guidanceText: { backgroundColor: 'rgba(12, 24, 19, .82)', borderRadius: 12, color: '#FFFFFF', fontSize: 14, fontWeight: '700', overflow: 'hidden', paddingHorizontal: 14, paddingVertical: 10, textAlign: 'center' },
+  repCard: { alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 20, flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, paddingHorizontal: 18, paddingVertical: 15 },
+  repLabel: { color: '#738078', fontSize: 11, fontWeight: '600' },
+  repValue: { color: '#173C2D', fontSize: 38, fontWeight: '900', lineHeight: 42 },
+  repUnit: { color: '#516159', fontSize: 11 },
+  metricsRow: { flexDirection: 'row', gap: 8 },
+  metric: { alignItems: 'center', backgroundColor: '#F3F7F4', borderRadius: 12, minWidth: 68, paddingHorizontal: 8, paddingVertical: 9 },
+  metricValue: { color: '#1C4937', fontSize: 16, fontWeight: '800' },
+  metricLabel: { color: '#76837C', fontSize: 9, marginTop: 2 },
+  qualityNote: { color: '#68766F', fontSize: 10, marginTop: 8, textAlign: 'center' },
+  controls: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  button: { alignItems: 'center', borderRadius: 14, flex: 1, paddingVertical: 14 },
+  primaryButton: { backgroundColor: '#176A48' },
+  primaryButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
+  secondaryButton: { backgroundColor: '#E2E8E4' },
+  secondaryButtonText: { color: '#33463D', fontSize: 14, fontWeight: '800' },
+  disclaimer: { color: '#7C8882', fontSize: 9, paddingBottom: 8, paddingTop: 10, textAlign: 'center' },
+});
