@@ -150,4 +150,11 @@ describe('Python analysis integration', () => {
   it('parses the versioned Python response', () => {
     expect(parsePythonAnalysisMessage(JSON.stringify(pythonResult(160, 1)))?.metrics?.averageKneeAngle).toBe(160);
   });
+
+  it('keeps Python warnings for frontend coaching', () => {
+    const result = pythonResult(130, 1);
+    result.analysis.warnings = ['knee_valgus'];
+    const state = analyzePythonResult(createInitialSquatState(), result);
+    expect(state.analysisWarnings).toEqual(['knee_valgus']);
+  });
 });

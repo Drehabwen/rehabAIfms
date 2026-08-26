@@ -80,6 +80,7 @@ export interface SquatAnalysisState {
   lastTimestampMs?: number;
   smoothedKneeAngle?: number;
   metrics?: SquatMetrics;
+  analysisWarnings?: string[];
   quality: CaptureQuality;
 }
 

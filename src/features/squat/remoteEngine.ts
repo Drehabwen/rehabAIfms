@@ -63,6 +63,7 @@ export function analyzePythonResult(
       shoulderTiltDeg: result.metrics.shoulderTiltDeg,
       centerShiftPercent: result.metrics.centerShiftPercent,
     },
+    analysisWarnings: result.analysis.warnings,
     quality,
   };
 }

@@ -226,6 +226,10 @@ export function squatGuidance(state: SquatAnalysisState): string {
     return '正在寻找身体关键点';
   }
 
+  if (state.analysisWarnings?.includes('knee_valgus')) return '双膝向外打开，保持膝盖对准脚尖';
+  if (state.analysisWarnings?.includes('lateral_weight_shift')) return '保持身体居中，避免重心偏向一侧';
+  if (state.analysisWarnings?.includes('knee_angle_asymmetry')) return '左右腿同步发力，保持下降对称';
+
   switch (state.phase) {
     case 'finding-subject':
       return '请自然站立，完成起始校准';
