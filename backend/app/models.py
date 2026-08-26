@@ -42,6 +42,7 @@ class FrontalMetrics(BaseModel):
     shoulderTiltDeg: float
     trunkLateralLeanDeg: float
     centerShiftPercent: float
+    kneeWobblePercent: float
 
 
 class FrameAnalysis(BaseModel):
@@ -57,6 +58,7 @@ class TimelinePoint(BaseModel):
     kneeAngleAsymmetry: float
     centerShiftPercent: float
     maxValgusPercent: float
+    kneeWobblePercent: float
 
 
 class RepetitionSummary(BaseModel):
@@ -89,6 +91,8 @@ class SessionReport(BaseModel):
     p95KneeAngleAsymmetry: float | None
     p95CenterShiftPercent: float | None
     p95ValgusPercent: float | None
+    p95KneeWobblePercent: float | None
+    kneeStabilityScore: float | None
     symmetryScore: float | None
     recommendations: list[str]
     warningCounts: dict[str, int]

@@ -55,6 +55,7 @@ def test_builds_session_report_from_frontend_rep_boundaries() -> None:
     assert report.validFrameRate == 100
     assert report.qualityLevel == "good"
     assert report.p95CenterShiftPercent == 0
+    assert report.kneeStabilityScore == 100
     assert report.symmetryScore is not None
     assert report.reps[0].repId == 1
 
@@ -68,3 +69,19 @@ def test_low_quality_report_suppresses_symmetry_score() -> None:
     assert report.qualityLevel == "low"
     assert report.symmetryScore is None
     assert "重新采集" in report.qualityMessage
+
+
+def test_detects_repeated_lateral_knee_wobble() -> None:
+    analyzer = FrontalSquatAnalyzer()
+    results = []
+    for index, inset in enumerate([0.0, 0.025, -0.025, 0.025, -0.025]):
+        frame = pose_frame(knee_inset=inset)
+        frame.sequence = index
+        frame.timestampMs = index * 33
+        results.append(analyzer.analyze(frame))
+    assert any("knee_instability" in result.analysis.warnings for result in results)
+    report = analyzer.report(SessionEnd(type="session-end-v1", durationMs=500, repetitions=0, partialRepetitions=0, reps=[]))
+    assert report.p95KneeWobblePercent is not None
+    assert report.p95KneeWobblePercent > 2.5
+    assert report.kneeStabilityScore is not None
+    assert report.kneeStabilityScore < 100

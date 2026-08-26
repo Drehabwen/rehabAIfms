@@ -59,6 +59,8 @@ class FrontalSquatAnalyzer:
         self._warning_counts: dict[str, int] = {}
         self._total_frames = 0
         self._valid_frames = 0
+        self._left_knee_offsets: list[float] = []
+        self._right_knee_offsets: list[float] = []
 
     def _timeline_point(self, timestamp_ms: float, metrics: FrontalMetrics) -> TimelinePoint | None:
         self._started_at = timestamp_ms if self._started_at is None else self._started_at
@@ -73,6 +75,7 @@ class FrontalSquatAnalyzer:
             kneeAngleAsymmetry=sum(item.kneeAngleAsymmetry for item in self._window) / count,
             centerShiftPercent=sum(item.centerShiftPercent for item in self._window) / count,
             maxValgusPercent=max(max(item.leftValgusPercent, item.rightValgusPercent) for item in self._window),
+            kneeWobblePercent=sum(item.kneeWobblePercent for item in self._window) / count,
         )
         self._window = []
         self._window_started_at = timestamp_ms
@@ -92,14 +95,18 @@ class FrontalSquatAnalyzer:
         p95_asymmetry = _percentile([item.kneeAngleAsymmetry for item in metrics], 0.95)
         p95_shift = _percentile([abs(item.centerShiftPercent) for item in metrics], 0.95)
         p95_valgus = _percentile([max(item.leftValgusPercent, item.rightValgusPercent) for item in metrics], 0.95)
+        p95_wobble = _percentile([item.kneeWobblePercent for item in metrics], 0.95)
+        stability = max(0.0, 100 - (p95_wobble / 8) * 100) if p95_wobble is not None and quality_level != "low" else None
         symmetry = max(0.0, 100 - (p95_asymmetry / 30) * 100) if p95_asymmetry is not None and quality_level != "low" else None
         recommendations: list[str] = []
         if quality_level != "good":
             recommendations.append("退后半步并保持全身入镜，避免遮挡髋、膝和脚踝。")
         if p95_shift is not None and p95_shift > 10:
             recommendations.append("下蹲时保持骨盆居中，避免持续向一侧偏移。")
-        if p95_valgus is not None and p95_valgus > 6:
-            recommendations.append("让膝盖朝向脚尖方向，避免内扣。")
+        if p95_wobble is not None and p95_wobble > 2.5:
+            recommendations.append("降低动作速度，让双膝沿稳定轨迹下降和站起，减少左右晃动。")
+        elif p95_valgus is not None and p95_valgus > 6:
+            recommendations.append("膝部轨迹基本稳定，但存在向内偏移；注意膝盖朝向脚尖。")
         if session.partialRepetitions:
             recommendations.append("下一组优先完成稳定的底部位置，再开始站起。")
         if not recommendations:
@@ -115,6 +122,8 @@ class FrontalSquatAnalyzer:
             p95KneeAngleAsymmetry=p95_asymmetry,
             p95CenterShiftPercent=p95_shift,
             p95ValgusPercent=p95_valgus,
+            p95KneeWobblePercent=p95_wobble,
+            kneeStabilityScore=stability,
             symmetryScore=symmetry,
             recommendations=recommendations,
             warningCounts=self._warning_counts,
@@ -152,6 +161,17 @@ class FrontalSquatAnalyzer:
         knee_width = abs(points[LEFT["knee"]].x - points[RIGHT["knee"]].x)
         hip_width = abs(points[LEFT["hip"]].x - points[RIGHT["hip"]].x)
         stance_width = max(ankle_width, hip_width * 0.75, 0.05)
+        left_knee_offset = (points[LEFT["knee"]].x - points[LEFT["ankle"]].x) / stance_width * 100
+        right_knee_offset = (points[RIGHT["ankle"]].x - points[RIGHT["knee"]].x) / stance_width * 100
+        self._left_knee_offsets.append(left_knee_offset)
+        self._right_knee_offsets.append(right_knee_offset)
+        self._left_knee_offsets = self._left_knee_offsets[-3:]
+        self._right_knee_offsets = self._right_knee_offsets[-3:]
+        knee_wobble = 0.0
+        if len(self._left_knee_offsets) == 3:
+            left_acceleration = abs(self._left_knee_offsets[2] - 2 * self._left_knee_offsets[1] + self._left_knee_offsets[0])
+            right_acceleration = abs(self._right_knee_offsets[2] - 2 * self._right_knee_offsets[1] + self._right_knee_offsets[0])
+            knee_wobble = max(left_acceleration, right_acceleration)
         asymmetry = abs(left_angle - right_angle)
         left_valgus = _valgus_percent(points[LEFT["hip"]], points[LEFT["knee"]], points[LEFT["ankle"]], hip_center_x)
         right_valgus = _valgus_percent(points[RIGHT["hip"]], points[RIGHT["knee"]], points[RIGHT["ankle"]], hip_center_x)
@@ -175,6 +195,8 @@ class FrontalSquatAnalyzer:
             warnings.append("lateral_weight_shift")
         if asymmetry > 12:
             warnings.append("knee_angle_asymmetry")
+        if knee_wobble > 2.5:
+            warnings.append("knee_instability")
 
         metrics = FrontalMetrics(
             leftKneeAngle=left_angle,
@@ -191,6 +213,7 @@ class FrontalSquatAnalyzer:
                 abs(((points[LEFT["shoulder"]].y + points[RIGHT["shoulder"]].y) / 2) - ((points[LEFT["hip"]].y + points[RIGHT["hip"]].y) / 2)),
             )),
             centerShiftPercent=center_shift,
+            kneeWobblePercent=knee_wobble,
         )
         self._metrics.append(metrics)
         for warning in warnings:
