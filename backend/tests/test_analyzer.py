@@ -85,3 +85,28 @@ def test_detects_repeated_lateral_knee_wobble() -> None:
     assert report.p95KneeWobblePercent > 2.5
     assert report.kneeStabilityScore is not None
     assert report.kneeStabilityScore < 100
+
+
+def test_detects_pelvis_and_trunk_lateral_control_warnings() -> None:
+    analyzer = FrontalSquatAnalyzer()
+    frame = pose_frame()
+    frame.landmarks[24].y += 0.04
+    frame.landmarks[11].x += 0.06
+    frame.landmarks[12].x += 0.06
+    result = analyzer.analyze(frame)
+    assert "pelvis_tilt" in result.analysis.warnings
+    assert "trunk_lateral_lean" in result.analysis.warnings
+
+
+def test_scores_repeatability_from_multiple_repetitions() -> None:
+    analyzer = FrontalSquatAnalyzer()
+    analyzer.analyze(pose_frame())
+    session = SessionEnd(
+        type="session-end-v1", durationMs=5000, repetitions=2, partialRepetitions=0,
+        reps=[
+            RepetitionSummary(repId=1, startedAtMs=0, bottomAtMs=1000, completedAtMs=2000, durationMs=2000, minKneeAngle=0, maxDepthPercent=25),
+            RepetitionSummary(repId=2, startedAtMs=2500, bottomAtMs=3500, completedAtMs=4500, durationMs=2000, minKneeAngle=0, maxDepthPercent=25),
+        ],
+    )
+    report = analyzer.report(session)
+    assert report.repetitionConsistencyScore == 100

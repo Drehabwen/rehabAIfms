@@ -59,6 +59,8 @@ class TimelinePoint(BaseModel):
     centerShiftPercent: float
     maxValgusPercent: float
     kneeWobblePercent: float
+    pelvisTiltDeg: float
+    trunkLateralLeanDeg: float
 
 
 class RepetitionSummary(BaseModel):
@@ -93,6 +95,10 @@ class SessionReport(BaseModel):
     p95ValgusPercent: float | None
     p95KneeWobblePercent: float | None
     kneeStabilityScore: float | None
+    kneeSynchronyScore: float | None
+    repetitionConsistencyScore: float | None
+    p95PelvisTiltDeg: float | None
+    p95TrunkLateralLeanDeg: float | None
     symmetryScore: float | None
     recommendations: list[str]
     warningCounts: dict[str, int]

@@ -37,6 +37,16 @@ def _percentile(values: list[float], quantile: float) -> float | None:
     return ordered[lower] + (ordered[upper] - ordered[lower]) * (position - lower)
 
 
+def _coefficient_of_variation(values: list[float]) -> float | None:
+    if len(values) < 2:
+        return None
+    mean = sum(values) / len(values)
+    if abs(mean) < 1e-9:
+        return None
+    variance = sum((value - mean) ** 2 for value in values) / len(values)
+    return math.sqrt(variance) / abs(mean)
+
+
 def _valgus_percent(hip: Landmark, knee: Landmark, ankle: Landmark, center_x: float) -> float:
     dy = ankle.y - hip.y
     interpolation = 0.5 if abs(dy) < 1e-9 else (knee.y - hip.y) / dy
@@ -76,6 +86,8 @@ class FrontalSquatAnalyzer:
             centerShiftPercent=sum(item.centerShiftPercent for item in self._window) / count,
             maxValgusPercent=max(max(item.leftValgusPercent, item.rightValgusPercent) for item in self._window),
             kneeWobblePercent=sum(item.kneeWobblePercent for item in self._window) / count,
+            pelvisTiltDeg=sum(abs(item.pelvisTiltDeg) for item in self._window) / count,
+            trunkLateralLeanDeg=sum(abs(item.trunkLateralLeanDeg) for item in self._window) / count,
         )
         self._window = []
         self._window_started_at = timestamp_ms
@@ -96,7 +108,22 @@ class FrontalSquatAnalyzer:
         p95_shift = _percentile([abs(item.centerShiftPercent) for item in metrics], 0.95)
         p95_valgus = _percentile([max(item.leftValgusPercent, item.rightValgusPercent) for item in metrics], 0.95)
         p95_wobble = _percentile([item.kneeWobblePercent for item in metrics], 0.95)
+        p95_pelvis_tilt = _percentile([abs(item.pelvisTiltDeg) for item in metrics], 0.95)
+        p95_trunk_lean = _percentile([abs(item.trunkLateralLeanDeg) for item in metrics], 0.95)
         stability = max(0.0, 100 - (p95_wobble / 8) * 100) if p95_wobble is not None and quality_level != "low" else None
+        synchrony_errors: list[float] = []
+        for previous_metric, current_metric in zip(metrics, metrics[1:]):
+            left_delta = current_metric.leftKneeAngle - previous_metric.leftKneeAngle
+            right_delta = current_metric.rightKneeAngle - previous_metric.rightKneeAngle
+            movement = abs(left_delta) + abs(right_delta)
+            if movement >= 1:
+                synchrony_errors.append(min(1.0, abs(left_delta - right_delta) / movement))
+        p95_synchrony_error = _percentile(synchrony_errors, 0.95)
+        synchrony = (1 - p95_synchrony_error) * 100 if p95_synchrony_error is not None and quality_level != "low" else None
+        duration_cv = _coefficient_of_variation([rep.durationMs for rep in session.reps])
+        depth_cv = _coefficient_of_variation([rep.maxDepthPercent for rep in session.reps])
+        consistency_components = [value for value in (duration_cv, depth_cv) if value is not None]
+        consistency = max(0.0, 100 - sum(consistency_components) / len(consistency_components) * 100) if consistency_components and quality_level != "low" else None
         symmetry = max(0.0, 100 - (p95_asymmetry / 30) * 100) if p95_asymmetry is not None and quality_level != "low" else None
         recommendations: list[str] = []
         if quality_level != "good":
@@ -109,6 +136,10 @@ class FrontalSquatAnalyzer:
             recommendations.append("膝部轨迹基本稳定，但存在向内偏移；注意膝盖朝向脚尖。")
         if session.partialRepetitions:
             recommendations.append("下一组优先完成稳定的底部位置，再开始站起。")
+        if p95_pelvis_tilt is not None and p95_pelvis_tilt > 4:
+            recommendations.append("保持骨盆水平，避免下蹲过程中一侧髋部明显抬高。")
+        if p95_trunk_lean is not None and p95_trunk_lean > 5:
+            recommendations.append("保持躯干居中，避免向一侧倾斜代偿。")
         if not recommendations:
             recommendations.append("动作整体稳定，可在保持质量的前提下逐步增加次数。")
         return SessionReport(
@@ -124,6 +155,10 @@ class FrontalSquatAnalyzer:
             p95ValgusPercent=p95_valgus,
             p95KneeWobblePercent=p95_wobble,
             kneeStabilityScore=stability,
+            kneeSynchronyScore=synchrony,
+            repetitionConsistencyScore=consistency,
+            p95PelvisTiltDeg=p95_pelvis_tilt,
+            p95TrunkLateralLeanDeg=p95_trunk_lean,
             symmetryScore=symmetry,
             recommendations=recommendations,
             warningCounts=self._warning_counts,
@@ -197,6 +232,15 @@ class FrontalSquatAnalyzer:
             warnings.append("knee_angle_asymmetry")
         if knee_wobble > 2.5:
             warnings.append("knee_instability")
+        pelvis_tilt = _line_angle(points[LEFT["hip"]], points[RIGHT["hip"]])
+        trunk_lean = math.degrees(math.atan2(
+            ((points[LEFT["shoulder"]].x + points[RIGHT["shoulder"]].x) / 2) - hip_center_x,
+            abs(((points[LEFT["shoulder"]].y + points[RIGHT["shoulder"]].y) / 2) - ((points[LEFT["hip"]].y + points[RIGHT["hip"]].y) / 2)),
+        ))
+        if abs(pelvis_tilt) > 4:
+            warnings.append("pelvis_tilt")
+        if abs(trunk_lean) > 5:
+            warnings.append("trunk_lateral_lean")
 
         metrics = FrontalMetrics(
             leftKneeAngle=left_angle,
@@ -206,12 +250,9 @@ class FrontalSquatAnalyzer:
             kneeDistanceRatio=knee_width / stance_width,
             leftValgusPercent=left_valgus,
             rightValgusPercent=right_valgus,
-            pelvisTiltDeg=_line_angle(points[LEFT["hip"]], points[RIGHT["hip"]]),
+            pelvisTiltDeg=pelvis_tilt,
             shoulderTiltDeg=_line_angle(points[LEFT["shoulder"]], points[RIGHT["shoulder"]]),
-            trunkLateralLeanDeg=math.degrees(math.atan2(
-                ((points[LEFT["shoulder"]].x + points[RIGHT["shoulder"]].x) / 2) - hip_center_x,
-                abs(((points[LEFT["shoulder"]].y + points[RIGHT["shoulder"]].y) / 2) - ((points[LEFT["hip"]].y + points[RIGHT["hip"]].y) / 2)),
-            )),
+            trunkLateralLeanDeg=trunk_lean,
             centerShiftPercent=center_shift,
             kneeWobblePercent=knee_wobble,
         )
